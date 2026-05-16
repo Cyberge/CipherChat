@@ -1,0 +1,298 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>CipherChat — Login</title>
+
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600&family=Syne:wght@600;700&display=swap"
+      rel="stylesheet"
+    />
+
+    <link rel="stylesheet" href="../css/style.css" />
+  </head>
+  <body class="login">
+    <div id="cipherBg" class="cipherBg"></div>
+    <div class="login__center">
+      <div class="card authCard">
+        <div class="authTop">
+          <div class="brand">
+            <div class="brand__title">CipherChat</div>
+            <div class="brand__sub">Classical ciphers, modern messaging</div>
+          </div>
+          <div class="seg" role="tablist" aria-label="Auth mode">
+            <button id="tabSignIn" class="active" type="button">Sign in</button>
+            <button id="tabCreate" type="button">Create</button>
+          </div>
+        </div>
+
+        <div class="authBody">
+          <!-- SIGN IN -->
+          <div id="signInSection" class="authSection">
+            <div class="methodTabs">
+              <button id="mEmail" class="btn btn--primary" type="button">Email</button>
+              <button id="mUsername" class="btn" type="button">Username</button>
+              <button id="mPhone" class="btn" type="button">Phone</button>
+            </div>
+
+            <!-- Email -->
+            <div id="loginEmailBox" class="authSection">
+              <div class="field">
+                <div class="label">Email</div>
+                <input id="loginEmail" class="input" placeholder="you@domain.com" autocomplete="email" />
+              </div>
+              <div class="field">
+                <div class="label">Password</div>
+                <div class="pwWrap">
+                  <input id="loginPass" class="input" type="password" placeholder="••••••••" autocomplete="current-password" />
+                  <button class="pwToggle" type="button" data-pw="loginPass">👁</button>
+                </div>
+              </div>
+              <button id="btnLoginEmail" class="btn btn--primary" type="button">Sign in</button>
+            </div>
+
+            <!-- Username -->
+            <div id="loginUsernameBox" class="authSection hidden">
+              <div class="field">
+                <div class="label">Username</div>
+                <input
+                  id="loginUsername"
+                  class="input"
+                  placeholder="yourname"
+                  autocomplete="username"
+                  oninput="this.value=this.value.toLowerCase()"
+                />
+              </div>
+              <div class="field">
+                <div class="label">Password</div>
+                <div class="pwWrap">
+                  <input id="loginUserPass" class="input" type="password" placeholder="••••••••" autocomplete="current-password" />
+                  <button class="pwToggle" type="button" data-pw="loginUserPass">👁</button>
+                </div>
+              </div>
+              <button id="btnLoginUsername" class="btn btn--primary" type="button">Sign in</button>
+            </div>
+
+            <!-- Phone -->
+            <div id="loginPhoneBox" class="authSection hidden">
+              <div class="field">
+                <div class="label">Phone</div>
+                <input id="loginPhone" class="input" placeholder="+1 555 555 5555" autocomplete="tel" />
+              </div>
+              <div class="otpRow">
+                <div class="field">
+                  <div class="label">OTP</div>
+                  <input id="loginOtp" class="input" placeholder="123456" inputmode="numeric" />
+                </div>
+                <button id="btnSendOtp" class="btn" type="button">Send OTP</button>
+              </div>
+              <button id="btnVerifyOtp" class="btn btn--primary" type="button">Verify & sign in</button>
+              <div id="recaptchaContainer"></div>
+              <div class="muted" style="font-size: 12px; line-height: 1.4">
+                Phone sign-in requires Firebase Phone Auth + reCAPTCHA to be configured in your Firebase Console.
+              </div>
+            </div>
+          </div>
+
+          <!-- CREATE ACCOUNT -->
+          <div id="createSection" class="authSection hidden">
+            <div class="field">
+              <div class="label">Username</div>
+              <input
+                id="regUsername"
+                class="input"
+                placeholder="lowercase only"
+                minlength="3"
+                oninput="this.value=this.value.toLowerCase()"
+                autocomplete="username"
+              />
+            </div>
+            <div class="field">
+              <div class="label">Email</div>
+              <input id="regEmail" class="input" placeholder="you@domain.com" autocomplete="email" />
+            </div>
+            <div class="field">
+              <div class="label">Password</div>
+              <div class="pwWrap">
+                <input id="regPass" class="input" type="password" placeholder="min 8 characters" autocomplete="new-password" />
+                <button class="pwToggle" type="button" data-pw="regPass">👁</button>
+              </div>
+            </div>
+            <div class="field">
+              <div class="label">Confirm password</div>
+              <div class="pwWrap">
+                <input id="regPass2" class="input" type="password" placeholder="repeat password" autocomplete="new-password" />
+                <button class="pwToggle" type="button" data-pw="regPass2">👁</button>
+              </div>
+            </div>
+            <button id="btnRegister" class="btn btn--primary" type="button">Create account</button>
+          </div>
+
+          <div id="authError" class="errBox"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- supabase (compat) -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="../js/supabase.js"></script>
+    <script>
+      // CRITICAL: no onAuthStateChanged redirect here (prevents redirect loop)
+
+      const $ = (id) => document.getElementById(id);
+      const errBox = $("authError");
+
+      function showErr(msg) {
+        errBox.textContent = msg || "";
+      }
+
+      // Background
+      (function cipherBackground() {
+        const el = $("cipherBg");
+        const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+        function render() {
+          const cols = Math.floor(window.innerWidth / 14);
+          const rows = Math.floor(window.innerHeight / 18);
+          let out = "";
+          for (let r = 0; r < rows; r++) {
+            let line = "";
+            for (let c = 0; c < cols; c++) line += chars[(Math.random() * chars.length) | 0];
+            out += line + "\n";
+          }
+          el.textContent = out;
+        }
+        render();
+        window.addEventListener("resize", render);
+        setInterval(render, 1600);
+      })();
+
+      // Tabs
+      const tabSignIn = $("tabSignIn");
+      const tabCreate = $("tabCreate");
+      const signInSection = $("signInSection");
+      const createSection = $("createSection");
+
+      function setAuthMode(mode) {
+        showErr("");
+        const isSignIn = mode === "signin";
+        tabSignIn.classList.toggle("active", isSignIn);
+        tabCreate.classList.toggle("active", !isSignIn);
+        signInSection.classList.toggle("hidden", !isSignIn);
+        createSection.classList.toggle("hidden", isSignIn);
+      }
+
+      tabSignIn.addEventListener("click", () => setAuthMode("signin"));
+      tabCreate.addEventListener("click", () => setAuthMode("create"));
+
+      // Login method tabs
+      const mEmail = $("mEmail");
+      const mUsername = $("mUsername");
+      const mPhone = $("mPhone");
+      const loginEmailBox = $("loginEmailBox");
+      const loginUsernameBox = $("loginUsernameBox");
+      const loginPhoneBox = $("loginPhoneBox");
+
+      function setMethod(method) {
+        showErr("");
+        const a = method === "email";
+        const b = method === "username";
+        const c = method === "phone";
+        mEmail.classList.toggle("btn--primary", a);
+        mUsername.classList.toggle("btn--primary", b);
+        mPhone.classList.toggle("btn--primary", c);
+        loginEmailBox.classList.toggle("hidden", !a);
+        loginUsernameBox.classList.toggle("hidden", !b);
+        loginPhoneBox.classList.toggle("hidden", !c);
+      }
+
+      mEmail.addEventListener("click", () => setMethod("email"));
+      mUsername.addEventListener("click", () => setMethod("username"));
+      mPhone.addEventListener("click", () => setMethod("phone"));
+      setMethod("email");
+
+      // Password show/hide
+      function setPwToggle(btn) {
+        const id = btn.getAttribute("data-pw");
+        const input = $(id);
+        let shown = false;
+        btn.addEventListener("click", () => {
+          shown = !shown;
+          input.type = shown ? "text" : "password";
+          btn.textContent = shown ? "🙈" : "👁";
+        });
+      }
+
+      document.querySelectorAll(".pwToggle").forEach(setPwToggle);
+
+      // Actions
+      $("btnLoginEmail").addEventListener("click", async () => {
+        showErr("");
+        try {
+          const email = $("loginEmail").value.trim();
+          const pass = $("loginPass").value;
+          await CC.loginWithEmail(email, pass);
+          window.location.replace("chat.html");
+        } catch (e) {
+          showErr(e?.message || String(e));
+        }
+      });
+
+      $("btnLoginUsername").addEventListener("click", async () => {
+        showErr("");
+        try {
+          const username = $("loginUsername").value.trim();
+          const pass = $("loginUserPass").value;
+          await CC.loginWithUsername(username, pass);
+          window.location.replace("chat.html");
+        } catch (e) {
+          showErr(e?.message || String(e));
+        }
+      });
+
+      $("btnRegister").addEventListener("click", async () => {
+        showErr("");
+        try {
+          const username = $("regUsername").value.trim();
+          const email = $("regEmail").value.trim();
+          const pass = $("regPass").value;
+          const pass2 = $("regPass2").value;
+          if (username.length < 3) throw new Error("Username must be at least 3 characters.");
+          if (!email) throw new Error("Email is required.");
+          if (pass.length < 8) throw new Error("Password must be at least 8 characters.");
+          if (pass !== pass2) throw new Error("Passwords do not match.");
+          await CC.registerUser({ email, username, password: pass });
+          // Explicit redirect only after success
+          window.location.replace("chat.html");
+        } catch (e) {
+          showErr(e?.message || String(e));
+        }
+      });
+
+      // Phone auth (optional)
+      let _confirmation = null;
+      $("btnSendOtp").addEventListener("click", async () => {
+        showErr("");
+        try {
+          const phone = $("loginPhone").value.trim();
+          _confirmation = await CC.startPhoneSignIn(phone, "recaptchaContainer");
+        } catch (e) {
+          showErr(e?.message || String(e));
+        }
+      });
+      $("btnVerifyOtp").addEventListener("click", async () => {
+        showErr("");
+        try {
+          if (!_confirmation) throw new Error("Send OTP first.");
+          const code = $("loginOtp").value.trim();
+          await CC.verifyPhoneOtp(_confirmation, code);
+          window.location.replace("chat.html");
+        } catch (e) {
+          showErr(e?.message || String(e));
+        }
+      });
+    </script>
+  </body>
+</html>

@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>CipherChat</title>
+
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600&family=Syne:wght@600;700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="../css/style.css" />
+  </head>
+  <body>
+    <div class="app">
+      <!-- Sidebar -->
+      <aside class="sidebar">
+        <div class="sideHeader">
+          <div class="logo">CipherChat</div>
+          <div class="sideActions">
+            <button id="btnNewDM" class="btn iconBtn" type="button" title="New message">✉</button>
+            <button id="btnNewGroup" class="btn iconBtn" type="button" title="New group">👥</button>
+          </div>
+        </div>
+
+        <div class="sideMain">
+          <div class="searchRow">
+            <input id="searchConvos" class="input" placeholder="Search chats…" />
+          </div>
+          <div class="tabsRow">
+            <button id="tabDms" class="btn btn--primary" type="button">Direct</button>
+            <button id="tabGroups" class="btn" type="button">Groups</button>
+          </div>
+
+          <div id="convoList" class="list" aria-label="Conversations list"></div>
+        </div>
+
+        <div class="userBar">
+          <div class="userInfo">
+            <div id="meAvatar" class="avatar">CC</div>
+            <div class="userText">
+              <div id="meUsername" class="u">loading…</div>
+              <div class="s">Signed in</div>
+            </div>
+          </div>
+          <button id="btnLogout" class="btn btn--danger" type="button">Sign out</button>
+        </div>
+      </aside>
+
+      <!-- Chat Panel -->
+      <main class="panel">
+        <header class="chatHeader">
+          <div class="chatHeadLeft">
+            <button id="btnBack" class="btn iconBtn backBtn" type="button" title="Back">←</button>
+            <div id="chatAvatar" class="avatar">CC</div>
+            <div class="chatHeadText">
+              <div id="chatTitle" class="t">CipherChat</div>
+              <div id="chatSub" class="b">Select a chat to start</div>
+            </div>
+          </div>
+          <div class="sideActions">
+            <button id="btnGroupInfo" class="btn iconBtn" type="button" title="Group info" style="display: none">ℹ</button>
+          </div>
+        </header>
+
+        <div id="noChatState" class="noChat">
+          <div class="noChatBox">
+            <div class="noChatLogo">CC</div>
+            <div style="font-family: var(--font-display); font-size: 18px; margin-bottom: 6px">No chat selected</div>
+            <div class="muted" style="line-height: 1.5">
+              Open a direct message or group from the left.<br />
+              Use ✉ to start a new DM or 👥 to create a new group.
+            </div>
+          </div>
+        </div>
+
+        <!-- CRITICAL: manage via style.display only; do NOT add hidden class -->
+        <div id="activeChatState" style="display: none; flex-direction: column; height: 100vh">
+          <div id="messages" class="msgs" aria-label="Messages"></div>
+
+          <div class="composer">
+            <div class="composerTop">
+              <div class="field">
+                <div class="label">Cipher</div>
+                <select id="cipherSelect" class="select"></select>
+              </div>
+              <div class="field">
+                <div class="label" id="cipherKeyLabel">Key</div>
+                <input
+                  id="cipherKeyInput"
+                  class="input"
+                  placeholder="Key"
+                  style="display: none"
+                  autocomplete="off"
+                />
+              </div>
+              <button id="btnSelective" class="btn" type="button" style="display: none" title="Selective group decryption">
+                🎯 Selective
+              </button>
+              <button id="btnSend" class="btn btn--primary" type="button">Send</button>
+            </div>
+
+            <div id="memberPicker" class="memberPicker" style="display: none">
+              <div class="muted" style="font-size: 13px">Select who can auto-decrypt this message.</div>
+              <div id="memberList" class="memberList"></div>
+            </div>
+
+            <div class="composerBottom">
+              <textarea id="messageInput" class="textarea" placeholder="Type a message…"></textarea>
+            </div>
+          </div>
+        </div>
+      </main>
+    </div>
+
+    <!-- Modals -->
+    <!-- New DM -->
+    <div id="newDmModal" class="modalOverlay" aria-hidden="true">
+      <div class="modal">
+        <div class="modalHeader">
+          <div class="title">New message</div>
+          <button class="btn iconBtn" type="button" data-close="newDmModal">✕</button>
+        </div>
+        <div class="modalBody">
+          <div class="field">
+            <div class="label">Search users</div>
+            <input id="dmSearchInput" class="input" placeholder="Type a username…" oninput="this.value=this.value.toLowerCase()" />
+          </div>
+          <div id="dmResults" class="resultList"></div>
+          <div id="dmError" class="errBox"></div>
+        </div>
+        <div class="modalFooter">
+          <button class="btn" type="button" data-close="newDmModal">Cancel</button>
+          <button id="btnOpenDm" class="btn btn--primary" type="button">Open chat</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- New Group -->
+    <div id="newGroupModal" class="modalOverlay" aria-hidden="true">
+      <div class="modal">
+        <div class="modalHeader">
+          <div class="title">New group</div>
+          <button class="btn iconBtn" type="button" data-close="newGroupModal">✕</button>
+        </div>
+        <div class="modalBody">
+          <div class="field">
+            <div class="label">Group name</div>
+            <input id="groupNameInput" class="input" placeholder="e.g. ops-team" />
+          </div>
+          <div class="field">
+            <div class="label">Add members</div>
+            <input
+              id="groupUserSearch"
+              class="input"
+              placeholder="Search by username…"
+              oninput="this.value=this.value.toLowerCase()"
+            />
+          </div>
+          <div id="groupSelectedChips" style="display: flex; flex-wrap: wrap; gap: 8px"></div>
+          <div id="groupResults" class="resultList"></div>
+          <div id="groupError" class="errBox"></div>
+        </div>
+        <div class="modalFooter">
+          <button class="btn" type="button" data-close="newGroupModal">Cancel</button>
+          <button id="btnCreateGroup" class="btn btn--primary" type="button">Create group</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Group Info -->
+    <div id="groupInfoModal" class="modalOverlay" aria-hidden="true">
+      <div class="modal">
+        <div class="modalHeader">
+          <div class="title" id="groupInfoTitle">Group</div>
+          <button class="btn iconBtn" type="button" data-close="groupInfoModal">✕</button>
+        </div>
+        <div class="modalBody">
+          <div id="groupMembersList" class="memberTable"></div>
+          <div id="groupInfoError" class="errBox"></div>
+        </div>
+        <div class="modalFooter">
+          <button id="btnOpenAddMember" class="btn btn--primary" type="button">+ Add member</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Add Member -->
+    <div id="addMemberModal" class="modalOverlay" aria-hidden="true">
+      <div class="modal">
+        <div class="modalHeader">
+          <div class="title" id="addMemberTitle">Add member</div>
+          <button class="btn iconBtn" type="button" data-close="addMemberModal">✕</button>
+        </div>
+        <div class="modalBody">
+          <div class="field">
+            <div class="label">Search users</div>
+            <input
+              id="addMemberSearch"
+              class="input"
+              placeholder="Search by username…"
+              oninput="this.value=this.value.toLowerCase()"
+            />
+          </div>
+          <div id="addMemberResults" class="resultList"></div>
+          <div id="addMemberError" class="errBox"></div>
+        </div>
+        <div class="modalFooter">
+          <button class="btn" type="button" data-close="addMemberModal">Cancel</button>
+          <button id="btnConfirmAddMember" class="btn btn--primary" type="button">Add to group</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- supabase (compat) -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="../js/supabase.js"></script>
+  </body>
+</html>
+

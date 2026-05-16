@@ -1,0 +1,31 @@
+{
+  "rules": {
+    ".read": false,
+    ".write": false,
+    "dms": {
+      "$dmId": {
+        ".read": "auth != null && $dmId.matches('.*' + auth.uid + '.*')",
+        ".write": "auth != null && $dmId.matches('.*' + auth.uid + '.*')"
+      }
+    },
+    "conversations": {
+      "$uid": {
+        ".read": "auth != null && auth.uid == $uid",
+        ".write": "auth != null"
+      }
+    },
+    "groups": {
+      "$groupId": {
+        ".read": "auth != null",
+        ".write": "auth != null"
+      }
+    }
+  }
+}
+
+{
+  "rules": {
+    ".read": "now < 1778540400000",  // 2026-5-12
+    ".write": "now < 1778540400000",  // 2026-5-12
+  }
+}

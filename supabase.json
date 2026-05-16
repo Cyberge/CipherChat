@@ -1,0 +1,198 @@
+const SUPABASE_URL = "https://ymvsohsdzxtbqontrror.supabase.co";
+const SUPABASE_KEY = "sb_publishable_WiInP084-vv51XbPs2g9MA_kMmmM8DE";
+const sb = supabase.createClient(https://ymvsohsdzxtbqontrror.supabase.co, sb_publishable_WiInP084-vv51XbPs2g9MA_kMmmM8DE);
+
+const CC = {
+
+  // ── Auth ──────────────────────────────────────────────────
+  async registerUser({ email, username, password }) {
+    const { data, error } = await sb.auth.signUp({ email, password });
+    if (error) throw error;
+    const uid = data.user.uid;
+    await sb.from("users").insert({
+      uid, username: username.toLowerCase(), email,
+      avatar_initials: username.slice(0,2).toUpperCase(),
+      avatar_color: "#00e87a"
+    });
+    return data.user;
+  },
+
+  async loginWithEmail(email, password) {
+    const { data, error } = await sb.auth.signInWithPassword({ email, password });
+    if (error) throw error;
+    return data.user;
+  },
+
+  async loginWithUsername(username, password) {
+    const { data } = await sb.from("users")
+      .select("email").eq("username", username.toLowerCase()).single();
+    if (!data) throw new Error("Username not found");
+    return this.loginWithEmail(data.email, password);
+  },
+
+  async logoutUser() {
+    await sb.auth.signOut();
+  },
+
+  onAuthChange(callback) {
+    sb.auth.onAuthStateChange((event, session) => {
+      callback(session?.user || null);
+    });
+  },
+
+  // ── Users ─────────────────────────────────────────────────
+  async getUserProfile(uid) {
+    const { data } = await sb.from("users").select("*").eq("uid", uid).single();
+    if (!data) return null;
+    return { ...data, avatar: { initials: data.avatar_initials, color: data.avatar_color } };
+  },
+
+  async createUserProfile(uid, { username, email, phone }) {
+    await sb.from("users").upsert({
+      uid, username: username.toLowerCase(), email, phone,
+      avatar_initials: username.slice(0,2).toUpperCase(),
+      avatar_color: "#00e87a"
+    });
+    return this.getUserProfile(uid);
+  },
+
+  async searchUsers(query) {
+    const { data } = await sb.from("users")
+      .select("*").ilike("username", `${query}%`).limit(10);
+    return (data || []).map(u => ({
+      ...u, avatar: { initials: u.avatar_initials, color: u.avatar_color }
+    }));
+  },
+
+  generateAvatar(name) {
+    const colors = ["#1a6b4a","#8b3a3a","#2c5f8a","#6b4a8b","#8b6a1a"];
+    const color = colors[(name?.charCodeAt(0) || 0) % colors.length];
+    return { initials: (name || "??").slice(0,2).toUpperCase(), color };
+  },
+
+  // ── Direct Messages ───────────────────────────────────────
+  getDMId(uid1, uid2) {
+    return [uid1, uid2].sort().join("_");
+  },
+
+  async sendDM({ fromUid, toUid, ciphertext, cipherType, key }) {
+    const dmId = this.getDMId(fromUid, toUid);
+    const id = crypto.randomUUID();
+    await sb.from("direct_messages").insert({
+      id, from_uid: fromUid, to_uid: toUid, dm_id: dmId,
+      ciphertext, cipher_type: cipherType, key,
+      timestamp: Date.now()
+    });
+  },
+
+  listenDM(uid1, uid2, callback) {
+    const dmId = this.getDMId(uid1, uid2);
+    // Initial fetch
+    sb.from("direct_messages").select("*")
+      .eq("dm_id", dmId).order("timestamp")
+      .then(({ data }) => callback(this._mapDMs(data || [])));
+    // Realtime subscription
+    const sub = sb.channel(`dm_${dmId}`)
+      .on("postgres_changes", {
+        event: "INSERT", schema: "public",
+        table: "direct_messages", filter: `dm_id=eq.${dmId}`
+      }, () => {
+        sb.from("direct_messages").select("*")
+          .eq("dm_id", dmId).order("timestamp")
+          .then(({ data }) => callback(this._mapDMs(data || [])));
+      }).subscribe();
+    return () => sb.removeChannel(sub);
+  },
+
+  _mapDMs(rows) {
+    return rows.map(r => ({
+      id: r.id, fromUid: r.from_uid, toUid: r.to_uid,
+      ciphertext: r.ciphertext, cipherType: r.cipher_type,
+      key: r.key, timestamp: r.timestamp
+    }));
+  },
+
+  listenConversations(uid, callback) {
+    sb.from("direct_messages").select("*")
+      .or(`from_uid.eq.${uid},to_uid.eq.${uid}`)
+      .order("timestamp", { ascending: false })
+      .then(({ data }) => {
+        const seen = new Set();
+        const convos = [];
+        for (const r of (data || [])) {
+          const otherUid = r.from_uid === uid ? r.to_uid : r.from_uid;
+          if (seen.has(otherUid)) continue;
+          seen.add(otherUid);
+          convos.push({ id: r.dm_id, otherUid, lastMessage: r.ciphertext, lastTimestamp: r.timestamp });
+        }
+        callback(convos);
+      });
+  },
+
+  // ── Groups ────────────────────────────────────────────────
+  async createGroup({ name, creatorUid, memberUids }) {
+    const groupId = crypto.randomUUID();
+    const members = [...new Set([creatorUid, ...memberUids])];
+    const av = this.generateAvatar(name);
+    await sb.from("groups").insert({
+      group_id: groupId, name, creator_uid: creatorUid,
+      members, avatar_initials: av.initials, avatar_color: av.color
+    });
+    return groupId;
+  },
+
+  async getGroupInfo(groupId) {
+    const { data } = await sb.from("groups").select("*").eq("group_id", groupId).single();
+    if (!data) return null;
+    return { ...data, groupId: data.group_id, creatorUid: data.creator_uid,
+      avatar: { initials: data.avatar_initials, color: data.avatar_color } };
+  },
+
+  async getGroupsForUser(uid) {
+    const { data } = await sb.from("groups").select("*").contains("members", [uid]);
+    return (data || []).map(g => ({
+      ...g, groupId: g.group_id, creatorUid: g.creator_uid,
+      avatar: { initials: g.avatar_initials, color: g.avatar_color }
+    }));
+  },
+
+  async addMemberToGroup(groupId, newUid) {
+    const info = await this.getGroupInfo(groupId);
+    const members = [...new Set([...(info.members || []), newUid])];
+    await sb.from("groups").update({ members }).eq("group_id", groupId);
+  },
+
+  async sendGroupMessage({ groupId, fromUid, ciphertext, cipherType, keyEnvelopes }) {
+    await sb.from("group_messages").insert({
+      id: crypto.randomUUID(), group_id: groupId, from_uid: fromUid,
+      ciphertext, cipher_type: cipherType,
+      key_envelopes: keyEnvelopes, timestamp: Date.now()
+    });
+  },
+
+  listenGroupMessages(groupId, callback) {
+    sb.from("group_messages").select("*")
+      .eq("group_id", groupId).order("timestamp")
+      .then(({ data }) => callback(this._mapGroupMsgs(data || [])));
+    const sub = sb.channel(`group_${groupId}`)
+      .on("postgres_changes", {
+        event: "INSERT", schema: "public",
+        table: "group_messages", filter: `group_id=eq.${groupId}`
+      }, () => {
+        sb.from("group_messages").select("*")
+          .eq("group_id", groupId).order("timestamp")
+          .then(({ data }) => callback(this._mapGroupMsgs(data || [])));
+      }).subscribe();
+    return () => sb.removeChannel(sub);
+  },
+
+  _mapGroupMsgs(rows) {
+    return rows.map(r => ({
+      id: r.id, fromUid: r.from_uid, groupId: r.group_id,
+      ciphertext: r.ciphertext, cipherType: r.cipher_type,
+      keyEnvelopes: r.key_envelopes, timestamp: r.timestamp
+    }));
+  }
+};
+
+window.CC = CC;
