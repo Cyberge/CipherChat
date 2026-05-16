@@ -21,17 +21,11 @@
       <div class="boot__bar"><div class="boot__barFill"></div></div>
     </div>
 
-    <!-- Firebase (compat) -->
-    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
-
-    <script src="js/firebase.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="js/supabase.js"></script>
     <script>
-      firebase.auth().onAuthStateChanged((user) => {
-        if (user) window.location.replace("pages/chat.html");
-        else window.location.replace("pages/login.html");
+      CC.onAuthChange((user) => {
+        window.location.replace(user ? "pages/chat.html" : "pages/login.html");
       });
     </script>
   </body>

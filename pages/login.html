@@ -92,7 +92,7 @@
               <button id="btnVerifyOtp" class="btn btn--primary" type="button">Verify & sign in</button>
               <div id="recaptchaContainer"></div>
               <div class="muted" style="font-size: 12px; line-height: 1.4">
-                Phone sign-in requires Firebase Phone Auth + reCAPTCHA to be configured in your Firebase Console.
+                Phone sign-in requires Supabase SMS auth to be enabled for your project.
               </div>
             </div>
           </div>
@@ -140,12 +140,19 @@
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="../js/supabase.js"></script>
     <script>
-      // CRITICAL: no onAuthStateChanged redirect here (prevents redirect loop)
+      CC.onAuthChange((user) => {
+        if (user) window.location.replace("chat.html");
+      });
 
       const $ = (id) => document.getElementById(id);
       const errBox = $("authError");
 
       function showErr(msg) {
+        errBox.textContent = msg || "";
+      }
+
+      function showInfo(msg) {
+        errBox.style.color = "#9fe870";
         errBox.textContent = msg || "";
       }
 
@@ -176,6 +183,7 @@
       const createSection = $("createSection");
 
       function setAuthMode(mode) {
+        errBox.style.color = "";
         showErr("");
         const isSignIn = mode === "signin";
         tabSignIn.classList.toggle("active", isSignIn);
@@ -196,6 +204,7 @@
       const loginPhoneBox = $("loginPhoneBox");
 
       function setMethod(method) {
+        errBox.style.color = "";
         showErr("");
         const a = method === "email";
         const b = method === "username";
@@ -229,6 +238,7 @@
 
       // Actions
       $("btnLoginEmail").addEventListener("click", async () => {
+        errBox.style.color = "";
         showErr("");
         try {
           const email = $("loginEmail").value.trim();
@@ -241,6 +251,7 @@
       });
 
       $("btnLoginUsername").addEventListener("click", async () => {
+        errBox.style.color = "";
         showErr("");
         try {
           const username = $("loginUsername").value.trim();
@@ -253,6 +264,7 @@
       });
 
       $("btnRegister").addEventListener("click", async () => {
+        errBox.style.color = "";
         showErr("");
         try {
           const username = $("regUsername").value.trim();
@@ -263,8 +275,14 @@
           if (!email) throw new Error("Email is required.");
           if (pass.length < 8) throw new Error("Password must be at least 8 characters.");
           if (pass !== pass2) throw new Error("Passwords do not match.");
-          await CC.registerUser({ email, username, password: pass });
-          // Explicit redirect only after success
+          const result = await CC.registerUser({ email, username, password: pass });
+          if (result && result.pendingConfirmation) {
+            showInfo("Account created. Check your email and confirm it before signing in.");
+            setAuthMode("signin");
+            setMethod("email");
+            $("loginEmail").value = email;
+            return;
+          }
           window.location.replace("chat.html");
         } catch (e) {
           showErr(e?.message || String(e));
@@ -274,6 +292,7 @@
       // Phone auth (optional)
       let _confirmation = null;
       $("btnSendOtp").addEventListener("click", async () => {
+        errBox.style.color = "";
         showErr("");
         try {
           const phone = $("loginPhone").value.trim();
@@ -283,6 +302,7 @@
         }
       });
       $("btnVerifyOtp").addEventListener("click", async () => {
+        errBox.style.color = "";
         showErr("");
         try {
           if (!_confirmation) throw new Error("Send OTP first.");

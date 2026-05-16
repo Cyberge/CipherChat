@@ -643,6 +643,7 @@
     groupInfoErrorEl.textContent = "";
     groupMembersListEl.innerHTML = "";
     groupInfoTitleEl.textContent = activeChat.name;
+    btnOpenAddMemberEl.style.display = activeChat.creatorUid === currentUser.uid ? "inline-grid" : "none";
 
     const memberUids = activeChat.members || [];
     for (const uid of memberUids) {
@@ -694,6 +695,7 @@
 
   function openAddMember() {
     if (!activeChat || activeChat.type !== "group") return;
+    if (activeChat.creatorUid !== currentUser.uid) return;
     closeModal(groupInfoModalEl);
     selectedAddMemberUser = null;
     addMemberErrorEl.textContent = "";
@@ -929,4 +931,3 @@
   // Override the earlier ad-hoc selection logic by attaching stable handlers last
   patchSearchSelectionHandlers();
 })();
-
