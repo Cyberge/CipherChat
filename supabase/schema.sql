@@ -132,6 +132,30 @@ on public.users
 for update
 using (auth.uid()::text = uid::text);
 
+-- Username sign-in: resolve email before auth.uid() exists (anon cannot select public.users).
+create or replace function public.get_login_email_for_username(p_username text)
+returns text
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_email text;
+begin
+  select coalesce(nullif(trim(u.email), ''), au.email)
+  into v_email
+  from public.users u
+  inner join auth.users au on au.id = u.uid
+  where u.username = lower(trim(p_username))
+  limit 1;
+
+  return v_email;
+end;
+$$;
+
+revoke all on function public.get_login_email_for_username(text) from public;
+grant execute on function public.get_login_email_for_username(text) to anon, authenticated;
+
 drop policy if exists "direct_messages_select_participants" on public.direct_messages;
 create policy "direct_messages_select_participants"
 on public.direct_messages

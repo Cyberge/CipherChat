@@ -133,6 +133,24 @@
     return mapUser(data);
   }
 
+  /** Email for Supabase Auth sign-in; uses RPC so anon clients can log in by username. */
+  async function resolveLoginEmailForUsername(username) {
+    const u = safeLower(username);
+    if (!u) return null;
+
+    const { data, error } = await sb.rpc("get_login_email_for_username", { p_username: u });
+    if (error) {
+      const msg = String(error.message || error);
+      if (msg.includes("get_login_email_for_username") || error.code === "PGRST202") {
+        throw new Error(
+          "Username sign-in is not configured. Run supabase/username-login.sql in the Supabase SQL Editor."
+        );
+      }
+      throw error;
+    }
+    return data ? String(data).trim() : null;
+  }
+
   async function fetchDmRows(dmId) {
     const { data, error } = await sb
       .from("direct_messages")
@@ -248,11 +266,11 @@
     },
 
     async loginWithUsername(username, password) {
-      const profile = await getProfileByUsername(username);
-      if (!profile || !profile.email) {
-        throw new Error("No email login found for that username.");
+      const email = await resolveLoginEmailForUsername(username);
+      if (!email) {
+        throw new Error("No account found for that username.");
       }
-      return this.loginWithEmail(profile.email, password);
+      return this.loginWithEmail(email, password);
     },
 
     async startPhoneSignIn(phoneNumber) {
