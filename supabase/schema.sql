@@ -125,12 +125,12 @@ using (auth.uid() is not null);
 create policy "users_insert"
 on public.users
 for insert
-with check (auth.uid() = uid);
+with check (auth.uid()::text = uid::text);
 
 create policy "users_update"
 on public.users
 for update
-using (auth.uid() = uid);
+using (auth.uid()::text = uid::text);
 
 drop policy if exists "direct_messages_select_participants" on public.direct_messages;
 create policy "direct_messages_select_participants"

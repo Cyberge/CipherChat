@@ -1,6 +1,6 @@
 (function () {
-  const SUPABASE_URL = "https://ymvsohsdzxtbqontrror.supabase.co";
-  const SUPABASE_KEY = "sb_publishable_WiInP084-vv51XbPs2g9MA_kMmmM8DE";
+  const SUPABASE_URL = "https://ivaxurwvbnwdierpzulq.supabase.co";
+  const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Iml2YXh1cnd2Ym53ZGllcnB6dWxxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzg5Njk3MTgsImV4cCI6MjA5NDU0NTcxOH0.pdgTQx89e7KLir9PVfeOOCsgcmuuutth5k93yaSGTog";
 
   const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
@@ -49,7 +49,7 @@
       toUid: row.to_uid,
       ciphertext: row.ciphertext,
       cipherType: row.cipher_type,
-      key: row.message_key,
+      key: row.key ?? row.message_key ?? null,
       timestamp: row.timestamp,
       read: row.read,
     };
@@ -179,7 +179,12 @@
           },
         },
       });
-      if (error) throw error;
+      if (error) {
+        if (error.message === "Failed to fetch") {
+          throw new Error("Cannot reach Supabase. Check project URL and API key in js/supabase.js.");
+        }
+        throw error;
+      }
       if (!data.user) throw new Error("Could not create user.");
 
       const uid = data.user.id;
@@ -344,9 +349,8 @@
         to_uid: normalizeUuid(toUid, "Recipient ID"),
         ciphertext,
         cipher_type: cipherType || null,
-        message_key: key ?? null,
+        key: key ?? null,
         timestamp: nowTs(),
-        read: false,
       };
       const { error } = await sb.from("direct_messages").insert(payload);
       if (error) throw error;
