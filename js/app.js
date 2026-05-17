@@ -776,16 +776,31 @@
 
   async function ensureProfile(user) {
     let p = await resolveProfileWithRetries(user.uid);
-    if (p) return p;
-    // Auto-create profile without logging out
     const email = user.email || null;
     const phone = user.phoneNumber || null;
-    const fallback = (email ? email.split("@")[0] : phone ? phone.replace(/\D/g, "").slice(-6) : "user") || "user";
-    const username = String(fallback).toLowerCase().slice(0, 20);
+    const preferredUsername =
+      (user.user_metadata?.username && String(user.user_metadata.username).toLowerCase().trim().slice(0, 20)) ||
+      null;
+
+    if (p && preferredUsername && preferredUsername.length >= 3 && p.username !== preferredUsername) {
+      try {
+        p = await CC.updateUsername(user.uid, preferredUsername);
+        _profileCache[p.uid] = p;
+      } catch (_) {}
+    }
+
+    if (p) return p;
+
+    const username =
+      preferredUsername ||
+      (email ? email.split("@")[0] : phone ? phone.replace(/\D/g, "").slice(-6) : "user").toLowerCase().slice(0, 20) ||
+      "user";
+
     try {
-      p = await CC.createUserProfile(user.uid, { uid: user.uid, username, email, phone });
+      p = await CC.createUserProfile(user.uid, { username, email, phone });
+      if (p) _profileCache[p.uid] = p;
       return p;
-    } catch (e) {
+    } catch {
       return null;
     }
   }

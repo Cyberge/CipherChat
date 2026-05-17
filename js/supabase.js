@@ -96,6 +96,26 @@
     };
   }
 
+  /** Prefer username chosen at registration (auth metadata), not email local-part. */
+  function usernameFromAuth(user) {
+    const meta = user?.user_metadata?.username;
+    if (meta) {
+      const u = safeLower(meta).slice(0, 20);
+      if (u.length >= 3) return u;
+    }
+    const email = user?.email;
+    if (email) {
+      const local = safeLower(email.split("@")[0]).slice(0, 20);
+      if (local.length >= 3) return local;
+    }
+    const phone = user?.phone || user?.phoneNumber;
+    if (phone) {
+      const digits = String(phone).replace(/\D/g, "").slice(-6);
+      if (digits) return `user${digits}`.slice(0, 20);
+    }
+    return "user";
+  }
+
   async function requireAuthUser() {
     const { data, error } = await sb.auth.getUser();
     if (error) throw error;
@@ -324,14 +344,32 @@
     async searchUsers(query) {
       const q = safeLower(query);
       if (!q) return [];
-      const { data, error } = await sb
-        .from("users")
-        .select("*")
-        .ilike("username", `${q}%`)
-        .order("username", { ascending: true })
-        .limit(20);
+      const pattern = `%${q}%`;
+      const [byUsername, byEmail] = await Promise.all([
+        sb.from("users").select("*").ilike("username", pattern).order("username", { ascending: true }).limit(20),
+        sb.from("users").select("*").ilike("email", pattern).order("username", { ascending: true }).limit(20),
+      ]);
+      if (byUsername.error) throw byUsername.error;
+      if (byEmail.error) throw byEmail.error;
+      const seen = new Set();
+      const rows = [];
+      for (const row of [...(byUsername.data || []), ...(byEmail.data || [])]) {
+        const id = row.uid;
+        if (seen.has(id)) continue;
+        seen.add(id);
+        rows.push(row);
+      }
+      rows.sort((a, b) => String(a.username).localeCompare(String(b.username)));
+      return rows.slice(0, 20).map(mapUser);
+    },
+
+    async updateUsername(uid, username) {
+      const cleanUid = normalizeUuid(uid, "User ID");
+      const u = safeLower(username);
+      if (u.length < 3) throw new Error("Username must be at least 3 characters.");
+      const { error } = await sb.from("users").update({ username: u }).eq("uid", cleanUid);
       if (error) throw error;
-      return (data || []).map(mapUser);
+      return this.getUserProfile(cleanUid);
     },
 
     generateAvatar,
