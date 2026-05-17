@@ -1,194 +1,318 @@
 <!DOCTYPE html>
 <html lang="en">
-<head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Sign in — CipherChat</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com" />
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600&family=Syne:wght@600;700;800&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="../css/style.css" />
-</head>
-<body class="loginPage">
-  <div class="cipherBg" id="cipherBg"></div>
-  <div class="loginWrap">
-    <div class="loginLogo">CipherChat</div>
-    <div class="card">
-      <div class="authTabs">
-        <button type="button" class="authTab active" id="tabSignIn">Sign in</button>
-        <button type="button" class="authTab" id="tabRegister">Create account</button>
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>CipherChat — Login</title>
+
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600&family=Syne:wght@600;700&display=swap"
+      rel="stylesheet"
+    />
+
+    <link rel="stylesheet" href="../css/style.css" />
+  </head>
+  <body class="login">
+    <div id="cipherBg" class="cipherBg"></div>
+    <div class="login__center">
+      <div class="card authCard">
+        <div class="authTop">
+          <div class="brand">
+            <div class="brand__title">CipherChat</div>
+            <div class="brand__sub">Classical ciphers, modern messaging</div>
+          </div>
+          <div class="seg" role="tablist" aria-label="Auth mode">
+            <button id="tabSignIn" class="active" type="button">Sign in</button>
+            <button id="tabCreate" type="button">Create</button>
+          </div>
+        </div>
+
+        <div class="authBody">
+          <!-- SIGN IN -->
+          <div id="signInSection" class="authSection">
+            <div class="methodTabs">
+              <button id="mEmail" class="btn btn--primary" type="button">Email</button>
+              <button id="mUsername" class="btn" type="button">Username</button>
+              <button id="mPhone" class="btn" type="button">Phone</button>
+            </div>
+
+            <!-- Email -->
+            <div id="loginEmailBox" class="authSection">
+              <div class="field">
+                <div class="label">Email</div>
+                <input id="loginEmail" class="input" placeholder="you@domain.com" autocomplete="email" />
+              </div>
+              <div class="field">
+                <div class="label">Password</div>
+                <div class="pwWrap">
+                  <input id="loginPass" class="input" type="password" placeholder="••••••••" autocomplete="current-password" />
+                  <button class="pwToggle" type="button" data-pw="loginPass">👁</button>
+                </div>
+              </div>
+              <button id="btnLoginEmail" class="btn btn--primary" type="button">Sign in</button>
+            </div>
+
+            <!-- Username -->
+            <div id="loginUsernameBox" class="authSection hidden">
+              <div class="field">
+                <div class="label">Username</div>
+                <input
+                  id="loginUsername"
+                  class="input"
+                  placeholder="yourname"
+                  autocomplete="username"
+                  oninput="this.value=this.value.toLowerCase()"
+                />
+              </div>
+              <div class="field">
+                <div class="label">Password</div>
+                <div class="pwWrap">
+                  <input id="loginUserPass" class="input" type="password" placeholder="••••••••" autocomplete="current-password" />
+                  <button class="pwToggle" type="button" data-pw="loginUserPass">👁</button>
+                </div>
+              </div>
+              <button id="btnLoginUsername" class="btn btn--primary" type="button">Sign in</button>
+            </div>
+
+            <!-- Phone -->
+            <div id="loginPhoneBox" class="authSection hidden">
+              <div class="field">
+                <div class="label">Phone</div>
+                <input id="loginPhone" class="input" placeholder="+1 555 555 5555" autocomplete="tel" />
+              </div>
+              <div class="otpRow">
+                <div class="field">
+                  <div class="label">OTP</div>
+                  <input id="loginOtp" class="input" placeholder="123456" inputmode="numeric" />
+                </div>
+                <button id="btnSendOtp" class="btn" type="button">Send OTP</button>
+              </div>
+              <button id="btnVerifyOtp" class="btn btn--primary" type="button">Verify & sign in</button>
+              <div id="recaptchaContainer"></div>
+              <div class="muted" style="font-size: 12px; line-height: 1.4">
+                Phone sign-in requires Supabase SMS auth to be enabled for your project.
+              </div>
+            </div>
+          </div>
+
+          <!-- CREATE ACCOUNT -->
+          <div id="createSection" class="authSection hidden">
+            <div class="field">
+              <div class="label">Username</div>
+              <input
+                id="regUsername"
+                class="input"
+                placeholder="lowercase only"
+                minlength="3"
+                oninput="this.value=this.value.toLowerCase()"
+                autocomplete="username"
+              />
+            </div>
+            <div class="field">
+              <div class="label">Email</div>
+              <input id="regEmail" class="input" placeholder="you@domain.com" autocomplete="email" />
+            </div>
+            <div class="field">
+              <div class="label">Password</div>
+              <div class="pwWrap">
+                <input id="regPass" class="input" type="password" placeholder="min 8 characters" autocomplete="new-password" />
+                <button class="pwToggle" type="button" data-pw="regPass">👁</button>
+              </div>
+            </div>
+            <div class="field">
+              <div class="label">Confirm password</div>
+              <div class="pwWrap">
+                <input id="regPass2" class="input" type="password" placeholder="repeat password" autocomplete="new-password" />
+                <button class="pwToggle" type="button" data-pw="regPass2">👁</button>
+              </div>
+            </div>
+            <button id="btnRegister" class="btn btn--primary" type="button">Create account</button>
+          </div>
+
+          <div id="authError" class="errBox"></div>
+        </div>
       </div>
-
-      <div id="signInPanel">
-        <div class="loginMethodTabs">
-          <button type="button" class="methodTab active" data-method="email">Email</button>
-          <button type="button" class="methodTab" data-method="username">Username</button>
-          <button type="button" class="methodTab" data-method="phone">Phone</button>
-        </div>
-
-        <div id="methodEmail">
-          <div class="formGroup">
-            <label>Email</label>
-            <input type="email" id="loginEmail" placeholder="you@example.com" autocomplete="email" />
-          </div>
-        </div>
-        <div id="methodUsername" class="hidden">
-          <div class="formGroup">
-            <label>Username</label>
-            <input type="text" id="loginUsername" placeholder="username" autocomplete="username" oninput="this.value=this.value.toLowerCase()" />
-          </div>
-        </div>
-        <div id="methodPhone" class="hidden">
-          <div class="formGroup">
-            <label>Phone</label>
-            <input type="tel" id="loginPhone" placeholder="+1234567890" />
-          </div>
-          <p style="font-size:12px;color:var(--text2);margin-bottom:10px">Sign in with the email linked to your phone number.</p>
-        </div>
-
-        <div class="formGroup">
-          <label>Password</label>
-          <div class="pwWrap">
-            <input type="password" id="loginPassword" placeholder="••••••••" autocomplete="current-password" />
-            <button type="button" class="pwToggle" data-target="loginPassword" aria-label="Toggle password">👁</button>
-          </div>
-        </div>
-        <button type="button" class="btnPrimary" id="btnLogin">Sign in</button>
-      </div>
-
-      <div id="registerPanel" class="hidden">
-        <div class="formGroup">
-          <label>Username</label>
-          <input type="text" id="regUsername" placeholder="username" oninput="this.value=this.value.toLowerCase()" />
-        </div>
-        <div class="formGroup">
-          <label>Email</label>
-          <input type="email" id="regEmail" placeholder="you@example.com" />
-        </div>
-        <div class="formGroup">
-          <label>Password</label>
-          <div class="pwWrap">
-            <input type="password" id="regPassword" placeholder="At least 8 characters" />
-            <button type="button" class="pwToggle" data-target="regPassword" aria-label="Toggle password">👁</button>
-          </div>
-        </div>
-        <div class="formGroup">
-          <label>Confirm password</label>
-          <div class="pwWrap">
-            <input type="password" id="regPassword2" placeholder="••••••••" />
-            <button type="button" class="pwToggle" data-target="regPassword2" aria-label="Toggle password">👁</button>
-          </div>
-        </div>
-        <button type="button" class="btnPrimary" id="btnRegister">Create account</button>
-      </div>
-
-      <div class="errMsg" id="errMsg"></div>
     </div>
-  </div>
 
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script src="../js/supabase.js"></script>
-  <script>
-    const cipherBg = document.getElementById("cipherBg");
-    const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
-    function refreshBg() {
-      let s = "";
-      const cols = Math.ceil(window.innerWidth / 10);
-      const rows = Math.ceil(window.innerHeight / 18);
-      for (let i = 0; i < cols * rows; i++) s += chars[Math.floor(Math.random() * chars.length)] + " ";
-      cipherBg.textContent = s;
-    }
-    refreshBg();
-    setInterval(refreshBg, 1600);
-
-    document.querySelectorAll(".pwToggle").forEach(btn => {
-      btn.addEventListener("click", () => {
-        const input = document.getElementById(btn.dataset.target);
-        const hidden = input.type === "password";
-        input.type = hidden ? "text" : "password";
-        btn.textContent = hidden ? "🙈" : "👁";
+    <!-- supabase (compat) -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="../js/supabase.js"></script>
+    <script>
+      CC.onAuthChange((user) => {
+        if (user) window.location.replace("chat.html");
       });
-    });
 
-    const tabSignIn = document.getElementById("tabSignIn");
-    const tabRegister = document.getElementById("tabRegister");
-    const signInPanel = document.getElementById("signInPanel");
-    const registerPanel = document.getElementById("registerPanel");
-    const errMsg = document.getElementById("errMsg");
+      const $ = (id) => document.getElementById(id);
+      const errBox = $("authError");
 
-    tabSignIn.addEventListener("click", () => {
-      tabSignIn.classList.add("active");
-      tabRegister.classList.remove("active");
-      signInPanel.classList.remove("hidden");
-      registerPanel.classList.add("hidden");
-      errMsg.textContent = "";
-    });
-    tabRegister.addEventListener("click", () => {
-      tabRegister.classList.add("active");
-      tabSignIn.classList.remove("active");
-      registerPanel.classList.remove("hidden");
-      signInPanel.classList.add("hidden");
-      errMsg.textContent = "";
-    });
+      function showErr(msg) {
+        errBox.textContent = msg || "";
+      }
 
-    let loginMethod = "email";
-    document.querySelectorAll(".methodTab").forEach(tab => {
-      tab.addEventListener("click", () => {
-        loginMethod = tab.dataset.method;
-        document.querySelectorAll(".methodTab").forEach(t => t.classList.toggle("active", t === tab));
-        document.getElementById("methodEmail").classList.toggle("hidden", loginMethod !== "email");
-        document.getElementById("methodUsername").classList.toggle("hidden", loginMethod !== "username");
-        document.getElementById("methodPhone").classList.toggle("hidden", loginMethod !== "phone");
-        errMsg.textContent = "";
-      });
-    });
+      function showInfo(msg) {
+        errBox.style.color = "#9fe870";
+        errBox.textContent = msg || "";
+      }
 
-    function showErr(msg) { errMsg.textContent = msg; }
-
-    document.getElementById("btnLogin").addEventListener("click", async () => {
-      const password = document.getElementById("loginPassword").value;
-      if (!password) { showErr("Enter your password."); return; }
-      showErr("");
-      try {
-        if (loginMethod === "email") {
-          const email = document.getElementById("loginEmail").value.trim();
-          if (!email) { showErr("Enter your email."); return; }
-          await CC.loginWithEmail(email, password);
-        } else if (loginMethod === "username") {
-          const username = document.getElementById("loginUsername").value.trim();
-          if (!username) { showErr("Enter your username."); return; }
-          await CC.loginWithUsername(username, password);
-        } else {
-          const phone = document.getElementById("loginPhone").value.trim();
-          if (!phone) { showErr("Enter your phone number."); return; }
-          const email = await CC.getEmailByPhone(phone);
-          if (!email) { showErr("User not found."); return; }
-          await CC.loginWithEmail(email, password);
+      // Background
+      (function cipherBackground() {
+        const el = $("cipherBg");
+        const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+        function render() {
+          const cols = Math.floor(window.innerWidth / 14);
+          const rows = Math.floor(window.innerHeight / 18);
+          let out = "";
+          for (let r = 0; r < rows; r++) {
+            let line = "";
+            for (let c = 0; c < cols; c++) line += chars[(Math.random() * chars.length) | 0];
+            out += line + "\n";
+          }
+          el.textContent = out;
         }
-        window.location.replace("chat.html");
-      } catch (e) {
-        if (e.message === "USER_NOT_FOUND") showErr("User not found.");
-        else if (e.message === "WRONG_PASSWORD") showErr("Incorrect password.");
-        else showErr(e.message || String(e));
-      }
-    });
+        render();
+        window.addEventListener("resize", render);
+        setInterval(render, 1600);
+      })();
 
-    document.getElementById("btnRegister").addEventListener("click", async () => {
-      const username = document.getElementById("regUsername").value.trim();
-      const email = document.getElementById("regEmail").value.trim();
-      const password = document.getElementById("regPassword").value;
-      const password2 = document.getElementById("regPassword2").value;
-      if (!username || !email) { showErr("Fill in username and email."); return; }
-      if (password !== password2) { showErr("Passwords do not match."); return; }
-      showErr("");
-      try {
-        await CC.registerUser({ email, username, password });
-        await CC.loginWithEmail(email, password);
-        window.location.replace("chat.html");
-      } catch (e) {
-        showErr(e.message || String(e));
+      // Tabs
+      const tabSignIn = $("tabSignIn");
+      const tabCreate = $("tabCreate");
+      const signInSection = $("signInSection");
+      const createSection = $("createSection");
+
+      function setAuthMode(mode) {
+        errBox.style.color = "";
+        showErr("");
+        const isSignIn = mode === "signin";
+        tabSignIn.classList.toggle("active", isSignIn);
+        tabCreate.classList.toggle("active", !isSignIn);
+        signInSection.classList.toggle("hidden", !isSignIn);
+        createSection.classList.toggle("hidden", isSignIn);
       }
-    });
-  </script>
-</body>
+
+      tabSignIn.addEventListener("click", () => setAuthMode("signin"));
+      tabCreate.addEventListener("click", () => setAuthMode("create"));
+
+      // Login method tabs
+      const mEmail = $("mEmail");
+      const mUsername = $("mUsername");
+      const mPhone = $("mPhone");
+      const loginEmailBox = $("loginEmailBox");
+      const loginUsernameBox = $("loginUsernameBox");
+      const loginPhoneBox = $("loginPhoneBox");
+
+      function setMethod(method) {
+        errBox.style.color = "";
+        showErr("");
+        const a = method === "email";
+        const b = method === "username";
+        const c = method === "phone";
+        mEmail.classList.toggle("btn--primary", a);
+        mUsername.classList.toggle("btn--primary", b);
+        mPhone.classList.toggle("btn--primary", c);
+        loginEmailBox.classList.toggle("hidden", !a);
+        loginUsernameBox.classList.toggle("hidden", !b);
+        loginPhoneBox.classList.toggle("hidden", !c);
+      }
+
+      mEmail.addEventListener("click", () => setMethod("email"));
+      mUsername.addEventListener("click", () => setMethod("username"));
+      mPhone.addEventListener("click", () => setMethod("phone"));
+      setMethod("email");
+
+      // Password show/hide
+      function setPwToggle(btn) {
+        const id = btn.getAttribute("data-pw");
+        const input = $(id);
+        let shown = false;
+        btn.addEventListener("click", () => {
+          shown = !shown;
+          input.type = shown ? "text" : "password";
+          btn.textContent = shown ? "🙈" : "👁";
+        });
+      }
+
+      document.querySelectorAll(".pwToggle").forEach(setPwToggle);
+
+      // Actions
+      $("btnLoginEmail").addEventListener("click", async () => {
+        errBox.style.color = "";
+        showErr("");
+        try {
+          const email = $("loginEmail").value.trim();
+          const pass = $("loginPass").value;
+          await CC.loginWithEmail(email, pass);
+          window.location.replace("chat.html");
+        } catch (e) {
+          showErr(e?.message || String(e));
+        }
+      });
+
+      $("btnLoginUsername").addEventListener("click", async () => {
+        errBox.style.color = "";
+        showErr("");
+        try {
+          const username = $("loginUsername").value.trim();
+          const pass = $("loginUserPass").value;
+          await CC.loginWithUsername(username, pass);
+          window.location.replace("chat.html");
+        } catch (e) {
+          showErr(e?.message || String(e));
+        }
+      });
+
+      $("btnRegister").addEventListener("click", async () => {
+        errBox.style.color = "";
+        showErr("");
+        try {
+          const username = $("regUsername").value.trim();
+          const email = $("regEmail").value.trim();
+          const pass = $("regPass").value;
+          const pass2 = $("regPass2").value;
+          if (username.length < 3) throw new Error("Username must be at least 3 characters.");
+          if (!email) throw new Error("Email is required.");
+          if (pass.length < 8) throw new Error("Password must be at least 8 characters.");
+          if (pass !== pass2) throw new Error("Passwords do not match.");
+          const result = await CC.registerUser({ email, username, password: pass });
+          if (result && result.pendingConfirmation) {
+            showInfo("Account created. Check your email and confirm it before signing in.");
+            setAuthMode("signin");
+            setMethod("email");
+            $("loginEmail").value = email;
+            return;
+          }
+          window.location.replace("chat.html");
+        } catch (e) {
+          showErr(e?.message || String(e));
+        }
+      });
+
+      // Phone auth (optional)
+      let _confirmation = null;
+      $("btnSendOtp").addEventListener("click", async () => {
+        errBox.style.color = "";
+        showErr("");
+        try {
+          const phone = $("loginPhone").value.trim();
+          _confirmation = await CC.startPhoneSignIn(phone, "recaptchaContainer");
+        } catch (e) {
+          showErr(e?.message || String(e));
+        }
+      });
+      $("btnVerifyOtp").addEventListener("click", async () => {
+        errBox.style.color = "";
+        showErr("");
+        try {
+          if (!_confirmation) throw new Error("Send OTP first.");
+          const code = $("loginOtp").value.trim();
+          await CC.verifyPhoneOtp(_confirmation, code);
+          window.location.replace("chat.html");
+        } catch (e) {
+          showErr(e?.message || String(e));
+        }
+      });
+    </script>
+  </body>
 </html>

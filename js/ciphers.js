@@ -1,381 +1,561 @@
-(function () {
-  "use strict";
+// CipherChat — CipherEngine (11 classical ciphers)
+// Exposes: window.CipherEngine = { encrypt, decrypt, getCipherList }
 
+(function () {
   const A = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
 
-  function onlyAlpha(s) { return /^[a-zA-Z]+$/.test(s); }
-  function toUpper(s) { return s.toUpperCase(); }
+  function isAlpha(ch) {
+    return /^[A-Za-z]$/.test(ch);
+  }
+
+  function mod(n, m) {
+    return ((n % m) + m) % m;
+  }
+
+  function alphaIndex(ch) {
+    return A.indexOf(ch.toUpperCase());
+  }
+
+  function shiftChar(ch, k) {
+    const i = alphaIndex(ch);
+    if (i < 0) return ch;
+    const out = A[mod(i + k, 26)];
+    return ch === ch.toLowerCase() ? out.toLowerCase() : out;
+  }
+
+  function onlyLettersLower(s) {
+    return String(s || "")
+      .replace(/[^A-Za-z]/g, "")
+      .toLowerCase();
+  }
 
   function gcd(a, b) {
     a = Math.abs(a);
     b = Math.abs(b);
-    while (b) { const t = b; b = a % b; a = t; }
+    while (b) {
+      const t = b;
+      b = a % b;
+      a = t;
+    }
     return a;
   }
 
-  function mod(n, m) { return ((n % m) + m) % m; }
-
-  function caesarEncrypt(text, key) {
-    const shift = parseInt(key, 10);
-    if (isNaN(shift)) throw new Error("Caesar key must be an integer.");
-    return text.split("").map(c => {
-      const u = c.toUpperCase();
-      const i = A.indexOf(u);
-      if (i < 0) return c;
-      const ch = A[(i + shift) % 26];
-      return c === c.toLowerCase() ? ch.toLowerCase() : ch;
-    }).join("");
-  }
-
-  function vigenereEncrypt(text, key) {
-    const kw = toUpper(key.replace(/[^a-zA-Z]/g, ""));
-    if (!kw) throw new Error("Vigenère key must contain letters.");
-    let ki = 0;
-    return text.split("").map(c => {
-      const u = c.toUpperCase();
-      const i = A.indexOf(u);
-      if (i < 0) return c;
-      const shift = A.indexOf(kw[ki % kw.length]);
-      ki++;
-      const ch = A[(i + shift) % 26];
-      return c === c.toLowerCase() ? ch.toLowerCase() : ch;
-    }).join("");
-  }
-
-  function affineEncrypt(text, key) {
-    const parts = key.split(",").map(s => parseInt(s.trim(), 10));
-    if (parts.length !== 2 || parts.some(isNaN)) throw new Error("Affine key must be two integers: a,b (e.g. 5,8).");
-    const [a, b] = parts;
-    if (gcd(a, 26) !== 1) throw new Error("Affine parameter a must be coprime with 26.");
-    return text.split("").map(c => {
-      const u = c.toUpperCase();
-      const i = A.indexOf(u);
-      if (i < 0) return c;
-      const j = mod(a * i + b, 26);
-      const ch = A[j];
-      return c === c.toLowerCase() ? ch.toLowerCase() : ch;
-    }).join("");
-  }
-
-  function affineDecrypt(text, key) {
-    const parts = key.split(",").map(s => parseInt(s.trim(), 10));
-    const [a, b] = parts;
-    if (gcd(a, 26) !== 1) throw new Error("Affine parameter a must be coprime with 26.");
-    let aInv = 0;
-    for (let x = 0; x < 26; x++) if (mod(a * x, 26) === 1) { aInv = x; break; }
-    return text.split("").map(c => {
-      const u = c.toUpperCase();
-      const i = A.indexOf(u);
-      if (i < 0) return c;
-      const j = mod(aInv * (i - b), 26);
-      const ch = A[j];
-      return c === c.toLowerCase() ? ch.toLowerCase() : ch;
-    }).join("");
-  }
-
-  function railFenceEncrypt(text, key) {
-    const rails = parseInt(key, 10);
-    if (isNaN(rails) || rails < 2) throw new Error("Rail-fence requires at least 2 rails.");
-    const fence = Array.from({ length: rails }, () => []);
-    let rail = 0;
-    let dir = 1;
-    for (const c of text) {
-      fence[rail].push(c);
-      if (rail === 0) dir = 1;
-      else if (rail === rails - 1) dir = -1;
-      rail += dir;
+  function egcd(a, b) {
+    let x0 = 1,
+      y0 = 0,
+      x1 = 0,
+      y1 = 1;
+    while (b !== 0) {
+      const q = Math.floor(a / b);
+      [a, b] = [b, a - q * b];
+      [x0, x1] = [x1, x0 - q * x1];
+      [y0, y1] = [y1, y0 - q * y1];
     }
-    return fence.map(r => r.join("")).join("");
+    return { g: a, x: x0, y: y0 };
   }
 
-  function railFenceDecrypt(text, key) {
-    const rails = parseInt(key, 10);
-    if (isNaN(rails) || rails < 2) throw new Error("Rail-fence requires at least 2 rails.");
+  function modInv(a, m) {
+    const { g, x } = egcd(mod(a, m), m);
+    if (g !== 1) return null;
+    return mod(x, m);
+  }
+
+  // 1) Caesar
+  const Caesar = {
+    encrypt: (text, key) => {
+      const k = parseInt(key, 10);
+      if (!Number.isFinite(k)) throw new Error("Caesar key must be an integer shift.");
+      return [...String(text || "")].map((c) => shiftChar(c, k)).join("");
+    },
+    decrypt: (text, key) => {
+      const k = parseInt(key, 10);
+      if (!Number.isFinite(k)) throw new Error("Caesar key must be an integer shift.");
+      return [...String(text || "")].map((c) => shiftChar(c, -k)).join("");
+    },
+  };
+
+  // 2) Vigenère
+  const Vigenere = {
+    encrypt: (text, key) => {
+      const k = onlyLettersLower(key);
+      if (!k) throw new Error("Vigenère key must be a keyword (letters only).");
+      let j = 0;
+      return [...String(text || "")]
+        .map((c) => {
+          if (!isAlpha(c)) return c;
+          const s = alphaIndex(k[j++ % k.length]);
+          return shiftChar(c, s);
+        })
+        .join("");
+    },
+    decrypt: (text, key) => {
+      const k = onlyLettersLower(key);
+      if (!k) throw new Error("Vigenère key must be a keyword (letters only).");
+      let j = 0;
+      return [...String(text || "")]
+        .map((c) => {
+          if (!isAlpha(c)) return c;
+          const s = alphaIndex(k[j++ % k.length]);
+          return shiftChar(c, -s);
+        })
+        .join("");
+    },
+  };
+
+  // 3) Affine
+  const Affine = {
+    encrypt: (text, key) => {
+      const parts = String(key || "")
+        .split(",")
+        .map((s) => parseInt(s.trim(), 10));
+      const a = parts[0],
+        b = parts[1];
+      if (!Number.isFinite(a) || !Number.isFinite(b)) throw new Error("Affine key must be 'a,b' (e.g. 5,8).");
+      if (gcd(a, 26) !== 1) throw new Error("Affine key 'a' must be coprime with 26.");
+      return [...String(text || "")]
+        .map((c) => {
+          const x = alphaIndex(c);
+          if (x < 0) return c;
+          const y = mod(a * x + b, 26);
+          const out = A[y];
+          return c === c.toLowerCase() ? out.toLowerCase() : out;
+        })
+        .join("");
+    },
+    decrypt: (text, key) => {
+      const parts = String(key || "")
+        .split(",")
+        .map((s) => parseInt(s.trim(), 10));
+      const a = parts[0],
+        b = parts[1];
+      if (!Number.isFinite(a) || !Number.isFinite(b)) throw new Error("Affine key must be 'a,b' (e.g. 5,8).");
+      if (gcd(a, 26) !== 1) throw new Error("Affine key 'a' must be coprime with 26.");
+      const aInv = modInv(a, 26);
+      if (aInv == null) throw new Error("Affine key 'a' has no modular inverse mod 26.");
+      return [...String(text || "")]
+        .map((c) => {
+          const y = alphaIndex(c);
+          if (y < 0) return c;
+          const x = mod(aInv * (y - b), 26);
+          const out = A[x];
+          return c === c.toLowerCase() ? out.toLowerCase() : out;
+        })
+        .join("");
+    },
+  };
+
+  // 4) Rail-fence
+  function railFenceEncrypt(text, rails) {
+    const n = parseInt(rails, 10);
+    if (!Number.isFinite(n) || n < 2) throw new Error("Rail-fence key must be a number of rails (>= 2).");
+    const rows = Array.from({ length: n }, () => []);
+    let r = 0,
+      dir = 1;
+    for (const ch of String(text || "")) {
+      rows[r].push(ch);
+      if (r === 0) dir = 1;
+      else if (r === n - 1) dir = -1;
+      r += dir;
+    }
+    return rows.map((x) => x.join("")).join("");
+  }
+
+  function railFenceDecrypt(cipher, rails) {
+    const n = parseInt(rails, 10);
+    if (!Number.isFinite(n) || n < 2) throw new Error("Rail-fence key must be a number of rails (>= 2).");
+    const text = String(cipher || "");
     const len = text.length;
     const pattern = [];
-    let rail = 0;
-    let dir = 1;
+    let r = 0,
+      dir = 1;
     for (let i = 0; i < len; i++) {
-      pattern.push(rail);
-      if (rail === 0) dir = 1;
-      else if (rail === rails - 1) dir = -1;
-      rail += dir;
+      pattern.push(r);
+      if (r === 0) dir = 1;
+      else if (r === n - 1) dir = -1;
+      r += dir;
     }
-    const counts = Array(rails).fill(0);
-    pattern.forEach(r => counts[r]++);
-    const rows = [];
+    const counts = Array.from({ length: n }, () => 0);
+    pattern.forEach((rr) => counts[rr]++);
+    const railsArr = Array.from({ length: n }, () => []);
     let idx = 0;
-    for (let r = 0; r < rails; r++) {
-      rows[r] = text.slice(idx, idx + counts[r]).split("");
-      idx += counts[r];
+    for (let rr = 0; rr < n; rr++) {
+      railsArr[rr] = text.slice(idx, idx + counts[rr]).split("");
+      idx += counts[rr];
     }
-    const out = [];
-    const pointers = Array(rails).fill(0);
-    pattern.forEach(r => out.push(rows[r][pointers[r]++]));
-    return out.join("");
+    const pos = Array.from({ length: n }, () => 0);
+    let out = "";
+    for (const rr of pattern) {
+      out += railsArr[rr][pos[rr]++];
+    }
+    return out;
+  }
+
+  const RailFence = {
+    encrypt: railFenceEncrypt,
+    decrypt: railFenceDecrypt,
+  };
+
+  // 5) Columnar Transposition
+  function columnarOrder(key) {
+    const k = onlyLettersLower(key);
+    if (!k) throw new Error("Columnar key must be a keyword (letters only).");
+    const pairs = k.split("").map((ch, idx) => ({ ch, idx }));
+    pairs.sort((a, b) => (a.ch === b.ch ? a.idx - b.idx : a.ch < b.ch ? -1 : 1));
+    return pairs.map((p) => p.idx);
   }
 
   function columnarEncrypt(text, key) {
-    const kw = toUpper(key.replace(/[^a-zA-Z]/g, ""));
-    if (!kw) throw new Error("Columnar key must contain letters.");
-    const cols = kw.length;
-    const order = kw.split("").map((c, i) => ({ c, i }))
-      .sort((a, b) => a.c.localeCompare(b.c) || a.i - b.i)
-      .map(x => x.i);
-    const padded = text.replace(/ /g, "_");
-    const rows = Math.ceil(padded.length / cols);
-    const total = rows * cols;
-    const pad = padded + "_".repeat(total - padded.length);
+    const order = columnarOrder(key);
+    const cols = order.length;
+    const t = String(text || "");
+    const rows = Math.ceil(t.length / cols);
+    const padLen = rows * cols - t.length;
+    const padded = t + "_".repeat(padLen);
     const grid = [];
-    for (let r = 0; r < rows; r++) grid.push(pad.slice(r * cols, (r + 1) * cols).split(""));
+    for (let r = 0; r < rows; r++) grid.push(padded.slice(r * cols, (r + 1) * cols).split(""));
     let out = "";
-    order.forEach(col => { for (let r = 0; r < rows; r++) out += grid[r][col]; });
+    for (const cIdx of order) {
+      for (let r = 0; r < rows; r++) out += grid[r][cIdx];
+    }
     return out;
   }
 
-  function columnarDecrypt(text, key) {
-    const kw = toUpper(key.replace(/[^a-zA-Z]/g, ""));
-    if (!kw) throw new Error("Columnar key must contain letters.");
-    const cols = kw.length;
-    const order = kw.split("").map((c, i) => ({ c, i }))
-      .sort((a, b) => a.c.localeCompare(b.c) || a.i - b.i)
-      .map(x => x.i);
-    const rows = Math.ceil(text.length / cols);
-    const colLens = Array(cols).fill(Math.floor(text.length / cols));
-    const extra = text.length % cols;
-    order.forEach((col, rank) => {
-      if (rank < extra) colLens[col]++;
-    });
-    const grid = Array.from({ length: rows }, () => Array(cols).fill(""));
+  function columnarDecrypt(cipher, key) {
+    const order = columnarOrder(key);
+    const cols = order.length;
+    const t = String(cipher || "");
+    const rows = Math.ceil(t.length / cols);
+    const total = rows * cols;
+    const padded = t.padEnd(total, "_");
+    const grid = Array.from({ length: rows }, () => Array.from({ length: cols }, () => ""));
     let idx = 0;
-    order.forEach(col => {
-      const len = colLens[col];
-      for (let r = 0; r < len; r++) grid[r][col] = text[idx++];
-    });
-    return grid.map(row => row.join("")).join("").replace(/_/g, " ").replace(/_+$/g, "").trimEnd();
+    for (const cIdx of order) {
+      for (let r = 0; r < rows; r++) {
+        grid[r][cIdx] = padded[idx++] || "_";
+      }
+    }
+    const joined = grid.map((row) => row.join("")).join("");
+    return joined.replace(/_+$/g, "");
+  }
+
+  const Columnar = {
+    encrypt: columnarEncrypt,
+    decrypt: columnarDecrypt,
+  };
+
+  // 6) Permutation (block-wise)
+  function parsePermutation(key) {
+    const parts = String(key || "")
+      .split(",")
+      .map((s) => parseInt(s.trim(), 10))
+      .filter((n) => Number.isFinite(n));
+    if (!parts.length) throw new Error("Permutation key must be comma-separated order (e.g. 3,1,4,2).");
+    const n = parts.length;
+    const set = new Set(parts);
+    if (set.size !== n) throw new Error("Permutation key must not contain duplicates.");
+    for (const v of parts) {
+      if (v < 1 || v > n) throw new Error("Permutation values must be in range 1..N.");
+    }
+    // Convert to 0-based positions, where output[i] = input[perm[i]]
+    return parts.map((v) => v - 1);
+  }
+
+  function invertPermutation(p) {
+    const inv = Array.from({ length: p.length }, () => 0);
+    for (let i = 0; i < p.length; i++) inv[p[i]] = i;
+    return inv;
   }
 
   function permutationEncrypt(text, key) {
-    const order = key.split(",").map(s => parseInt(s.trim(), 10) - 1);
-    if (order.some(isNaN) || order.length < 2) throw new Error("Permutation key: comma-separated 1-based positions (e.g. 3,1,4,2).");
-    const n = order.length;
-    const blocks = [];
-    for (let i = 0; i < text.length; i += n) {
-      const block = text.slice(i, i + n).padEnd(n, " ");
-      const out = Array(n);
-      order.forEach((dest, src) => { out[dest] = block[src]; });
-      blocks.push(out.join("").trimEnd());
-    }
-    return blocks.join("");
-  }
-
-  function permutationDecrypt(text, key) {
-    const order = key.split(",").map(s => parseInt(s.trim(), 10) - 1);
-    const n = order.length;
-    const inv = Array(n);
-    order.forEach((dest, src) => { inv[dest] = src; });
-    const blocks = [];
-    for (let i = 0; i < text.length; i += n) {
-      const block = text.slice(i, i + n).padEnd(n, " ");
-      const out = Array(n);
-      inv.forEach((src, dest) => { out[dest] = block[src]; });
-      blocks.push(out.join("").trimEnd());
-    }
-    return blocks.join("");
-  }
-
-  function grilleEncrypt(text, key) {
-    const holes = key.split(",").map(s => parseInt(s.trim(), 10));
-    if (holes.some(isNaN)) throw new Error("Grille key: comma-separated hole positions (0-based).");
-    const size = Math.ceil(Math.sqrt(text.length));
-    const gridLen = size * size;
-    const grid = Array(gridLen).fill("");
-    let ti = 0;
-    const sortedHoles = [...holes].sort((a, b) => a - b);
-    for (const pos of sortedHoles) {
-      if (pos >= gridLen) throw new Error("Grille hole position out of range.");
-      if (ti < text.length) grid[pos] = text[ti++];
-    }
-    for (let i = 0; i < gridLen && ti < text.length; i++) {
-      if (!sortedHoles.includes(i)) grid[i] = text[ti++];
-    }
-    return grid.join("");
-  }
-
-  function grilleDecrypt(text, key) {
-    const holes = key.split(",").map(s => parseInt(s.trim(), 10));
-    const size = Math.ceil(Math.sqrt(text.length));
-    const gridLen = size * size;
-    const grid = text.padEnd(gridLen, " ").split("");
-    const sortedHoles = [...holes].sort((a, b) => a - b);
+    const p = parsePermutation(key);
+    const n = p.length;
+    const t = String(text || "");
     let out = "";
-    sortedHoles.forEach(pos => { if (grid[pos]) out += grid[pos]; });
-    for (let i = 0; i < gridLen; i++) {
-      if (!sortedHoles.includes(i) && grid[i] && grid[i] !== " ") out += grid[i];
-    }
-    return out.trimEnd();
-  }
-
-  function blockEncrypt(text, key) {
-    if (!key) throw new Error("Block cipher requires a passphrase.");
-    const bs = 4;
-    let out = "";
-    for (let i = 0; i < text.length; i++) {
-      const c = text.charCodeAt(i);
-      if (c >= 32 && c <= 126) {
-        const k = key.charCodeAt(i % key.length) % 95;
-        out += String.fromCharCode(((c - 32 + k) % 95) + 32);
-      } else out += text[i];
+    for (let i = 0; i < t.length; i += n) {
+      const block = t.slice(i, i + n).padEnd(n, "_");
+      const arr = block.split("");
+      for (let j = 0; j < n; j++) out += arr[p[j]];
     }
     return out;
   }
 
-  function blockDecrypt(text, key) {
-    if (!key) throw new Error("Block cipher requires a passphrase.");
+  function permutationDecrypt(cipher, key) {
+    const p = parsePermutation(key);
+    const inv = invertPermutation(p);
+    const n = p.length;
+    const t = String(cipher || "");
     let out = "";
-    for (let i = 0; i < text.length; i++) {
-      const c = text.charCodeAt(i);
-      if (c >= 32 && c <= 126) {
-        const k = key.charCodeAt(i % key.length) % 95;
-        out += String.fromCharCode(((c - 32 - k + 95) % 95) + 32);
-      } else out += text[i];
+    for (let i = 0; i < t.length; i += n) {
+      const block = t.slice(i, i + n).padEnd(n, "_");
+      const arr = block.split("");
+      const dec = Array.from({ length: n }, () => "_");
+      for (let j = 0; j < n; j++) dec[j] = arr[inv[j]];
+      out += dec.join("");
+    }
+    return out.replace(/_+$/g, "");
+  }
+
+  const Permutation = {
+    encrypt: permutationEncrypt,
+    decrypt: permutationDecrypt,
+  };
+
+  // 7) Grille (simple position extraction in square)
+  function grilleSquareSize(holes) {
+    const maxPos = Math.max(...holes, 0);
+    const n = Math.ceil(Math.sqrt(maxPos + 1));
+    return Math.max(n, 2);
+  }
+
+  function parseHoles(key) {
+    const holes = String(key || "")
+      .split(",")
+      .map((s) => parseInt(s.trim(), 10))
+      .filter((n) => Number.isFinite(n) && n >= 0);
+    if (!holes.length) throw new Error("Grille key must be comma-separated hole positions (e.g. 0,3,5,8).");
+    const set = new Set(holes);
+    if (set.size !== holes.length) throw new Error("Grille hole positions must not repeat.");
+    return holes;
+  }
+
+  function grilleEncrypt(text, key) {
+    const holes = parseHoles(key);
+    const n = grilleSquareSize(holes);
+    const size = n * n;
+    const t = String(text || "").padEnd(size, "_").slice(0, size);
+    // "Holes reveal important chars": take only chars at hole positions
+    let out = "";
+    for (const pos of holes) {
+      if (pos >= size) throw new Error(`Grille hole position ${pos} out of range for ${n}x${n} grid.`);
+      out += t[pos];
+    }
+    return out;
+  }
+
+  function grilleDecrypt(cipher, key) {
+    const holes = parseHoles(key);
+    const n = grilleSquareSize(holes);
+    const size = n * n;
+    const c = String(cipher || "");
+    const grid = Array.from({ length: size }, () => "_");
+    for (let i = 0; i < holes.length; i++) {
+      const pos = holes[i];
+      if (pos >= size) throw new Error(`Grille hole position ${pos} out of range for ${n}x${n} grid.`);
+      grid[pos] = c[i] ?? "_";
+    }
+    return grid.join("").replace(/_+$/g, "");
+  }
+
+  const Grille = {
+    encrypt: grilleEncrypt,
+    decrypt: grilleDecrypt,
+  };
+
+  // 8) Block (blocks of 4)
+  function blockShiftFromPass(pass) {
+    const p = String(pass || "");
+    let sum = 0;
+    for (const ch of p) sum += ch.charCodeAt(0);
+    return mod(sum, 26);
+  }
+
+  function blockEncrypt(text, key) {
+    const base = blockShiftFromPass(key);
+    const t = String(text || "");
+    let out = "";
+    for (let i = 0; i < t.length; i++) {
+      const posInBlock = i % 4;
+      out += shiftChar(t[i], base + posInBlock);
+    }
+    return out;
+  }
+
+  function blockDecrypt(cipher, key) {
+    const base = blockShiftFromPass(key);
+    const t = String(cipher || "");
+    let out = "";
+    for (let i = 0; i < t.length; i++) {
+      const posInBlock = i % 4;
+      out += shiftChar(t[i], -(base + posInBlock));
+    }
+    return out;
+  }
+
+  const Block = {
+    encrypt: blockEncrypt,
+    decrypt: blockDecrypt,
+  };
+
+  // 9) Hill (2x2)
+  function parseHillKey(key) {
+    const parts = String(key || "")
+      .split(",")
+      .map((s) => parseInt(s.trim(), 10));
+    if (parts.length !== 4 || parts.some((n) => !Number.isFinite(n)))
+      throw new Error("Hill key must be 4 integers (2×2 matrix), e.g. 3,3,2,5.");
+    return parts.map((n) => mod(n, 26));
+  }
+
+  function hillDet(m) {
+    // m: [a,b,c,d]
+    return mod(m[0] * m[3] - m[1] * m[2], 26);
+  }
+
+  function hillInvMatrix(m) {
+    const det = hillDet(m);
+    const detInv = modInv(det, 26);
+    if (detInv == null) throw new Error("Hill matrix is not invertible mod 26.");
+    const a = m[0],
+      b = m[1],
+      c = m[2],
+      d = m[3];
+    // adjugate: [d, -b, -c, a]
+    const inv = [d, -b, -c, a].map((x) => mod(detInv * x, 26));
+    return inv;
+  }
+
+  function hillProcess(text, m) {
+    const t = onlyLettersLower(text);
+    const pairs = t.length % 2 === 1 ? t + "x" : t;
+    let out = "";
+    for (let i = 0; i < pairs.length; i += 2) {
+      const x1 = alphaIndex(pairs[i]);
+      const x2 = alphaIndex(pairs[i + 1]);
+      const y1 = mod(m[0] * x1 + m[1] * x2, 26);
+      const y2 = mod(m[2] * x1 + m[3] * x2, 26);
+      out += A[y1] + A[y2];
     }
     return out;
   }
 
   function hillEncrypt(text, key) {
-    const nums = key.split(",").map(s => parseInt(s.trim(), 10));
-    if (nums.length !== 4 || nums.some(isNaN)) throw new Error("Hill key: four integers for 2×2 matrix (e.g. 3,3,2,5).");
-    const [a, b, c, d] = nums;
-    const det = mod(a * d - b * c, 26);
-    if (gcd(det, 26) !== 1) throw new Error("Hill matrix is not invertible mod 26.");
-    let clean = text.replace(/[^a-zA-Z]/g, "").toUpperCase();
-    if (!clean) throw new Error("Hill cipher requires at least one letter.");
-    if (clean.length % 2 !== 0) clean += "X";
-    let out = "";
-    for (let i = 0; i < clean.length; i += 2) {
-      const v = [A.indexOf(clean[i]), A.indexOf(clean[i + 1])];
-      out += A[mod(a * v[0] + b * v[1], 26)];
-      out += A[mod(c * v[0] + d * v[1], 26)];
-    }
-    return out;
+    const m = parseHillKey(key);
+    const det = hillDet(m);
+    if (modInv(det, 26) == null) throw new Error("Hill matrix is not invertible mod 26.");
+    return hillProcess(text, m);
   }
 
-  function hillDecrypt(text, key) {
-    const nums = key.split(",").map(s => parseInt(s.trim(), 10));
-    const [[a, b], [c, d]] = [[nums[0], nums[1]], [nums[2], nums[3]]];
-    const det = mod(a * d - b * c, 26);
-    if (gcd(det, 26) !== 1) throw new Error("Hill matrix is not invertible mod 26.");
-    let detInv = 0;
-    for (let x = 0; x < 26; x++) if (mod(det * x, 26) === 1) { detInv = x; break; }
-    const ai = mod(d * detInv, 26);
-    const bi = mod(-b * detInv, 26);
-    const ci = mod(-c * detInv, 26);
-    const di = mod(a * detInv, 26);
+  function hillDecrypt(cipher, key) {
+    const m = parseHillKey(key);
+    const inv = hillInvMatrix(m);
+    const t = onlyLettersLower(cipher);
     let out = "";
-    const clean = text.replace(/[^a-zA-Z]/g, "").toUpperCase();
-    for (let i = 0; i < clean.length; i += 2) {
-      const v = [A.indexOf(clean[i]), A.indexOf(clean[i + 1])];
-      out += A[mod(ai * v[0] + bi * v[1], 26)];
-      out += A[mod(ci * v[0] + di * v[1], 26)];
+    const pairs = t.length % 2 === 1 ? t + "x" : t;
+    for (let i = 0; i < pairs.length; i += 2) {
+      const y1 = alphaIndex(pairs[i]);
+      const y2 = alphaIndex(pairs[i + 1]);
+      const x1 = mod(inv[0] * y1 + inv[1] * y2, 26);
+      const x2 = mod(inv[2] * y1 + inv[3] * y2, 26);
+      out += A[x1] + A[x2];
     }
-    return out;
+    return out.toLowerCase();
   }
 
-  function streamCipher(text, key) {
-    if (!key) throw new Error("Stream cipher requires a passphrase.");
+  const Hill = {
+    encrypt: hillEncrypt,
+    decrypt: hillDecrypt,
+  };
+
+  // 10) Stream (RC4-like) — symmetric
+  function rc4Bytes(keyStr) {
+    const key = String(keyStr || "");
+    if (!key) throw new Error("Stream key must be a non-empty passphrase.");
     const S = Array.from({ length: 256 }, (_, i) => i);
     let j = 0;
     for (let i = 0; i < 256; i++) {
-      j = (j + S[i] + key.charCodeAt(i % key.length)) % 256;
+      j = (j + S[i] + key.charCodeAt(i % key.length)) & 255;
       [S[i], S[j]] = [S[j], S[i]];
     }
     let i = 0;
     j = 0;
-    let out = "";
-    for (const ch of text) {
-      i = (i + 1) % 256;
-      j = (j + S[i]) % 256;
+    return function nextByte() {
+      i = (i + 1) & 255;
+      j = (j + S[i]) & 255;
       [S[i], S[j]] = [S[j], S[i]];
-      const k = S[(S[i] + S[j]) % 256] % 95;
-      const c = ch.charCodeAt(0);
-      if (c >= 32 && c <= 126) out += String.fromCharCode(((c - 32 + k) % 95) + 32);
-      else out += ch;
+      const K = S[(S[i] + S[j]) & 255];
+      return K;
+    };
+  }
+
+  function streamXor(text, key) {
+    const next = rc4Bytes(key);
+    const t = String(text || "");
+    let out = "";
+    for (let i = 0; i < t.length; i++) {
+      const b = next();
+      out += String.fromCharCode(t.charCodeAt(i) ^ b);
     }
     return out;
   }
 
-  function productEncrypt(text, key) {
-    const parts = key.split("|");
-    if (parts.length !== 2) throw new Error("Product key format: vigenereKey|columnarKey");
-    return columnarEncrypt(vigenereEncrypt(text, parts[0]), parts[1]);
-  }
-
-  function productDecrypt(text, key) {
-    const parts = key.split("|");
-    if (parts.length !== 2) throw new Error("Product key format: vigenereKey|columnarKey");
-    return vigenereDecrypt(columnarDecrypt(text, parts[1]), parts[0]);
-  }
-
-  function vigenereDecrypt(text, key) {
-    const kw = toUpper(key.replace(/[^a-zA-Z]/g, ""));
-    let ki = 0;
-    return text.split("").map(c => {
-      const u = c.toUpperCase();
-      const i = A.indexOf(u);
-      if (i < 0) return c;
-      const shift = A.indexOf(kw[ki % kw.length]);
-      ki++;
-      const ch = A[(i - shift + 26) % 26];
-      return c === c.toLowerCase() ? ch.toLowerCase() : ch;
-    }).join("");
-  }
-
-  const CIPHERS = [
-    { id: "none", label: "No cipher", keyLabel: "", keyPlaceholder: "" },
-    { id: "caesar", label: "Caesar", keyLabel: "Shift", keyPlaceholder: "3" },
-    { id: "vigenere", label: "Vigenère", keyLabel: "Keyword", keyPlaceholder: "SECRET" },
-    { id: "affine", label: "Affine", keyLabel: "a,b", keyPlaceholder: "5,8" },
-    { id: "railfence", label: "Rail-fence", keyLabel: "Rails", keyPlaceholder: "3" },
-    { id: "columnar", label: "Columnar", keyLabel: "Keyword", keyPlaceholder: "ZEBRA" },
-    { id: "permutation", label: "Permutation", keyLabel: "Order", keyPlaceholder: "3,1,4,2" },
-    { id: "grille", label: "Grille", keyLabel: "Holes", keyPlaceholder: "0,3,5,8" },
-    { id: "block", label: "Block", keyLabel: "Passphrase", keyPlaceholder: "mykey" },
-    { id: "hill", label: "Hill", keyLabel: "Matrix", keyPlaceholder: "3,3,2,5" },
-    { id: "stream", label: "Stream", keyLabel: "Passphrase", keyPlaceholder: "mypassword" },
-    { id: "product", label: "Product", keyLabel: "Vig|Col", keyPlaceholder: "SECRET|ZEBRA" },
-  ];
-
-  const OPS = {
-    none: { enc: (t) => t, dec: (t) => t },
-    caesar: { enc: caesarEncrypt, dec: (t, k) => caesarEncrypt(t, String(-parseInt(k, 10))) },
-    vigenere: { enc: vigenereEncrypt, dec: vigenereDecrypt },
-    affine: { enc: affineEncrypt, dec: affineDecrypt },
-    railfence: { enc: railFenceEncrypt, dec: railFenceDecrypt },
-    columnar: { enc: columnarEncrypt, dec: columnarDecrypt },
-    permutation: { enc: permutationEncrypt, dec: permutationDecrypt },
-    grille: { enc: grilleEncrypt, dec: grilleDecrypt },
-    block: { enc: blockEncrypt, dec: blockDecrypt },
-    hill: { enc: hillEncrypt, dec: hillDecrypt },
-    stream: { enc: streamCipher, dec: streamCipher },
-    product: { enc: productEncrypt, dec: productDecrypt },
+  const Stream = {
+    encrypt: streamXor,
+    decrypt: streamXor,
   };
 
-  window.CipherEngine = {
-    encrypt(id, text, key) {
-      const op = OPS[id];
-      if (!op) throw new Error("Unknown cipher: " + id);
-      if (id === "none") return text;
-      return op.enc(text, key);
+  // 11) Product (Vigenère then Columnar)
+  const Product = {
+    encrypt: (text, key) => {
+      const raw = String(key || "");
+      if (!raw.includes("|")) throw new Error("Product key must be 'vigKey|columnarKey' (missing '|').");
+      const [k1, k2] = raw.split("|");
+      return Columnar.encrypt(Vigenere.encrypt(text, k1), k2);
     },
-    decrypt(id, text, key) {
-      const op = OPS[id];
-      if (!op) throw new Error("Unknown cipher: " + id);
-      if (id === "none") return text;
-      return op.dec(text, key);
+    decrypt: (cipher, key) => {
+      const raw = String(key || "");
+      if (!raw.includes("|")) throw new Error("Product key must be 'vigKey|columnarKey' (missing '|').");
+      const [k1, k2] = raw.split("|");
+      return Vigenere.decrypt(Columnar.decrypt(cipher, k2), k1);
+    },
+  };
+
+  const registry = {
+    caesar: Caesar,
+    vigenere: Vigenere,
+    affine: Affine,
+    railfence: RailFence,
+    columnar: Columnar,
+    permutation: Permutation,
+    grille: Grille,
+    block: Block,
+    hill: Hill,
+    stream: Stream,
+    product: Product,
+  };
+
+  const cipherList = [
+    { id: "", label: "None", keyLabel: "", keyPlaceholder: "" },
+    { id: "caesar", label: "Caesar", keyLabel: "Shift", keyPlaceholder: "e.g. 3" },
+    { id: "vigenere", label: "Vigenère", keyLabel: "Keyword", keyPlaceholder: "e.g. SECRET" },
+    { id: "affine", label: "Affine", keyLabel: "a,b", keyPlaceholder: "e.g. 5,8" },
+    { id: "railfence", label: "Rail-fence", keyLabel: "Rails", keyPlaceholder: "e.g. 3" },
+    { id: "columnar", label: "Columnar", keyLabel: "Keyword", keyPlaceholder: "e.g. ZEBRA" },
+    { id: "permutation", label: "Permutation", keyLabel: "Order", keyPlaceholder: "e.g. 3,1,4,2" },
+    { id: "grille", label: "Grille", keyLabel: "Holes", keyPlaceholder: "e.g. 0,3,5,8" },
+    { id: "block", label: "Block", keyLabel: "Passphrase", keyPlaceholder: "e.g. mykey" },
+    { id: "hill", label: "Hill (2×2)", keyLabel: "Matrix", keyPlaceholder: "e.g. 3,3,2,5" },
+    { id: "stream", label: "Stream (RC4-like)", keyLabel: "Passphrase", keyPlaceholder: "e.g. mypassword" },
+    { id: "product", label: "Product", keyLabel: "vigKey|columnarKey", keyPlaceholder: "e.g. SECRET|ZEBRA" },
+  ];
+
+  window.CipherEngine = {
+    encrypt(cipherType, text, key) {
+      const id = String(cipherType || "");
+      if (!id) return String(text || "");
+      const impl = registry[id];
+      if (!impl) throw new Error(`Unknown cipher: ${id}`);
+      return impl.encrypt(String(text || ""), key);
+    },
+    decrypt(cipherType, text, key) {
+      const id = String(cipherType || "");
+      if (!id) return String(text || "");
+      const impl = registry[id];
+      if (!impl) throw new Error(`Unknown cipher: ${id}`);
+      return impl.decrypt(String(text || ""), key);
     },
     getCipherList() {
-      return CIPHERS.map(({ id, label, keyLabel, keyPlaceholder }) => ({ id, label, keyLabel, keyPlaceholder }));
+      return cipherList.slice();
     },
   };
 })();
+

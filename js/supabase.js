@@ -1,184 +1,492 @@
-const SUPABASE_URL = "https://ivaxurwvbnwdierpzulq.supabase.co";
-const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Iml2YXh1cnd2Ym53ZGllcnB6dWxxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzg5Njk3MTgsImV4cCI6MjA5NDU0NTcxOH0.pdgTQx89e7KLir9PVfeOOCsgcmuuutth5k93yaSGTog";
+(function () {
+  const SUPABASE_URL = "https://ymvsohsdzxtbqontrror.supabase.co";
+  const SUPABASE_KEY = "sb_publishable_WiInP084-vv51XbPs2g9MA_kMmmM8DE";
 
-const _sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+  const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
-function generateAvatar(name) {
-  const colors = ["#1a6b4a", "#8b3a3a", "#2c5f8a", "#6b4a8b", "#8b6a1a", "#3a6b6b", "#6b3a5a"];
-  const n = String(name || "?");
-  return { initials: n.slice(0, 2).toUpperCase(), color: colors[n.charCodeAt(0) % colors.length] };
-}
+  function nowTs() {
+    return Date.now();
+  }
 
-const CC = {
+  function safeLower(s) {
+    return String(s || "").trim().toLowerCase();
+  }
 
-  async registerUser({ email, username, password }) {
-    username = username.toLowerCase().trim();
-    if (username.length < 3) throw new Error("Username must be at least 3 characters.");
-    if (password.length < 8) throw new Error("Password must be at least 8 characters.");
-    const { data: existing } = await _sb.from("users").select("uid").eq("username", username).maybeSingle();
-    if (existing) throw new Error("Username already taken.");
-    const { data, error } = await _sb.auth.signUp({ email, password });
-    if (error) throw error;
-    const uid = data.user.id;
-    const av = generateAvatar(username);
-    await _sb.from("users").insert({ uid, username, email, avatar_initials: av.initials, avatar_color: av.color });
-    return data.user;
-  },
-
-  async loginWithEmail(email, password) {
-    const { data, error } = await _sb.auth.signInWithPassword({ email, password });
-    if (error) {
-      const { data: u } = await _sb.from("users").select("uid").eq("email", email.trim()).maybeSingle();
-      if (!u) throw new Error("USER_NOT_FOUND");
-      throw new Error("WRONG_PASSWORD");
+  function normalizeUuid(value, fieldName) {
+    const id = String(value || "").trim();
+    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(id)) {
+      throw new Error(`${fieldName} must be a valid UUID.`);
     }
-    return data.user;
-  },
+    return id;
+  }
 
-  async loginWithUsername(username, password) {
-    username = username.toLowerCase().trim();
-    const { data: u } = await _sb.from("users").select("email").eq("username", username).maybeSingle();
-    if (!u) throw new Error("USER_NOT_FOUND");
-    return this.loginWithEmail(u.email, password);
-  },
+  function generateAvatar(name) {
+    const colors = ["#1a6b4a", "#8b3a3a", "#2c5f8a", "#6b4a8b", "#8b6a1a", "#3a6b6b", "#6b3a5a"];
+    const n = String(name || "?");
+    const initials = (n.replace(/[^a-z0-9]/gi, "").slice(0, 2) || "CC").toUpperCase();
+    return { initials, color: colors[n.charCodeAt(0) % colors.length] };
+  }
 
-  async logoutUser() { await _sb.auth.signOut(); },
-
-  onAuthChange(callback) {
-    _sb.auth.onAuthStateChange((_e, session) => callback(session?.user || null));
-  },
-
-  async getUserProfile(uid) {
-    const { data } = await _sb.from("users").select("*").eq("uid", uid).maybeSingle();
-    return data ? this._mapUser(data) : null;
-  },
-
-  async createUserProfile(uid, { username, email, phone }) {
-    username = (username || "user").toLowerCase().slice(0, 20);
-    const av = generateAvatar(username);
-    await _sb.from("users").upsert({ uid, username, email: email || null, phone: phone || null, avatar_initials: av.initials, avatar_color: av.color });
-    return this.getUserProfile(uid);
-  },
-
-  async searchUsers(query) {
-    if (!query) return [];
-    const { data } = await _sb.from("users").select("*").ilike("username", `${query}%`).limit(10);
-    return (data || []).map(u => this._mapUser(u));
-  },
-
-  async getEmailByPhone(phone) {
-    const { data } = await _sb.from("users").select("email").eq("phone", phone.trim()).maybeSingle();
-    return data?.email || null;
-  },
-
-  _mapUser(u) {
-    return { uid: u.uid, username: u.username, email: u.email || null, phone: u.phone || null, avatar: { initials: u.avatar_initials, color: u.avatar_color } };
-  },
-
-  generateAvatar,
-
-  getDMId(uid1, uid2) { return [uid1, uid2].sort().join("_"); },
-
-  async sendDM({ fromUid, toUid, ciphertext, cipherType, key }) {
-    const { error } = await _sb.from("direct_messages").insert({
-      id: crypto.randomUUID(), dm_id: this.getDMId(fromUid, toUid),
-      from_uid: fromUid, to_uid: toUid,
-      ciphertext, cipher_type: cipherType || null, key: key || null, timestamp: Date.now()
-    });
-    if (error) throw error;
-  },
-
-  listenDM(uid1, uid2, callback) {
-    const dmId = this.getDMId(uid1, uid2);
-    const load = () => _sb.from("direct_messages").select("*").eq("dm_id", dmId).order("timestamp")
-      .then(({ data }) => callback(this._mapDMs(data)));
-    load();
-    const ch = _sb.channel(`dm:${dmId}`)
-      .on("postgres_changes", { event: "INSERT", schema: "public", table: "direct_messages", filter: `dm_id=eq.${dmId}` }, load)
-      .subscribe();
-    return () => _sb.removeChannel(ch);
-  },
-
-  _mapDMs(rows) {
-    return (rows || []).map(r => ({ id: r.id, fromUid: r.from_uid, toUid: r.to_uid, ciphertext: r.ciphertext, cipherType: r.cipher_type, key: r.key, timestamp: r.timestamp }));
-  },
-
-  listenConversations(uid, callback) {
-    const load = async () => {
-      const { data } = await _sb.from("direct_messages").select("*")
-        .or(`from_uid.eq.${uid},to_uid.eq.${uid}`).order("timestamp", { ascending: false });
-      const seen = new Set();
-      const convos = [];
-      for (const r of (data || [])) {
-        const otherUid = r.from_uid === uid ? r.to_uid : r.from_uid;
-        if (seen.has(otherUid)) continue;
-        seen.add(otherUid);
-        convos.push({ id: r.dm_id, otherUid, lastMessage: r.ciphertext, lastTimestamp: r.timestamp });
-      }
-      callback(convos);
+  function mapUser(row) {
+    if (!row) return null;
+    const username = row.username || "user";
+    const initials = row.avatar_initials || username.slice(0, 2).toUpperCase();
+    const color = row.avatar_color || "#2c5f8a";
+    return {
+      uid: row.uid,
+      username,
+      email: row.email || null,
+      phone: row.phone || null,
+      createdAt: row.created_at,
+      avatar: { initials, color },
     };
-    load();
-    const ch = _sb.channel(`convos:${uid}`)
-      .on("postgres_changes", { event: "INSERT", schema: "public", table: "direct_messages" }, load)
-      .subscribe();
-    return () => _sb.removeChannel(ch);
-  },
+  }
 
-  async createGroup({ name, creatorUid, memberUids }) {
-    const groupId = crypto.randomUUID();
-    const av = generateAvatar(name);
-    const { error } = await _sb.from("groups").insert({
-      group_id: groupId, name, creator_uid: creatorUid,
-      members: [...new Set([creatorUid, ...memberUids])],
-      avatar_initials: av.initials, avatar_color: av.color
-    });
+  function mapDM(row) {
+    return {
+      id: row.id,
+      fromUid: row.from_uid,
+      toUid: row.to_uid,
+      ciphertext: row.ciphertext,
+      cipherType: row.cipher_type,
+      key: row.message_key,
+      timestamp: row.timestamp,
+      read: row.read,
+    };
+  }
+
+  function mapGroup(row) {
+    if (!row) return null;
+    return {
+      groupId: row.group_id,
+      name: row.name,
+      creatorUid: row.creator_uid,
+      members: Array.isArray(row.members) ? row.members : [],
+      createdAt: row.created_at,
+      avatar: {
+        initials: row.avatar_initials,
+        color: row.avatar_color,
+      },
+    };
+  }
+
+  function mapGroupMessage(row) {
+    return {
+      id: row.id,
+      groupId: row.group_id,
+      fromUid: row.from_uid,
+      ciphertext: row.ciphertext,
+      cipherType: row.cipher_type,
+      keyEnvelopes: row.key_envelopes || {},
+      timestamp: row.timestamp,
+    };
+  }
+
+  function isRlsUsersInsertError(error) {
+    const msg = String(error && (error.message || error) || "").toLowerCase();
+    return msg.includes("row-level security") && msg.includes("table \"users\"");
+  }
+
+  function mapAuthUser(user) {
+    if (!user) return null;
+    return {
+      ...user,
+      uid: user.id,
+      phoneNumber: user.phone || null,
+    };
+  }
+
+  async function requireAuthUser() {
+    const { data, error } = await sb.auth.getUser();
     if (error) throw error;
-    return groupId;
-  },
+    if (!data.user) throw new Error("Not signed in.");
+    return data.user;
+  }
 
-  async getGroupInfo(groupId) {
-    const { data } = await _sb.from("groups").select("*").eq("group_id", groupId).maybeSingle();
-    return data ? this._mapGroup(data) : null;
-  },
-
-  async getGroupsForUser(uid) {
-    const { data } = await _sb.from("groups").select("*").contains("members", [uid]);
-    return (data || []).map(g => this._mapGroup(g));
-  },
-
-  async addMemberToGroup(groupId, newUid) {
-    const info = await this.getGroupInfo(groupId);
-    if (!info) throw new Error("Group not found.");
-    const members = [...new Set([...info.members, newUid])];
-    const { error } = await _sb.from("groups").update({ members }).eq("group_id", groupId);
+  async function getProfileByUsername(username) {
+    const { data, error } = await sb
+      .from("users")
+      .select("*")
+      .eq("username", safeLower(username))
+      .maybeSingle();
     if (error) throw error;
-  },
+    return mapUser(data);
+  }
 
-  _mapGroup(g) {
-    return { groupId: g.group_id, name: g.name, creatorUid: g.creator_uid, members: g.members || [], avatar: { initials: g.avatar_initials, color: g.avatar_color } };
-  },
-
-  async sendGroupMessage({ groupId, fromUid, ciphertext, cipherType, keyEnvelopes }) {
-    const { error } = await _sb.from("group_messages").insert({
-      id: crypto.randomUUID(), group_id: groupId, from_uid: fromUid,
-      ciphertext, cipher_type: cipherType || null, key_envelopes: keyEnvelopes || {}, timestamp: Date.now()
-    });
+  async function fetchDmRows(dmId) {
+    const { data, error } = await sb
+      .from("direct_messages")
+      .select("*")
+      .eq("dm_id", dmId)
+      .order("timestamp", { ascending: true })
+      .limit(100);
     if (error) throw error;
-  },
+    return (data || []).map(mapDM);
+  }
 
-  listenGroupMessages(groupId, callback) {
-    const load = () => _sb.from("group_messages").select("*").eq("group_id", groupId).order("timestamp")
-      .then(({ data }) => callback(this._mapGroupMsgs(data)));
-    load();
-    const ch = _sb.channel(`group:${groupId}`)
-      .on("postgres_changes", { event: "INSERT", schema: "public", table: "group_messages", filter: `group_id=eq.${groupId}` }, load)
-      .subscribe();
-    return () => _sb.removeChannel(ch);
-  },
+  async function fetchGroupRows(groupId) {
+    const { data, error } = await sb
+      .from("group_messages")
+      .select("*")
+      .eq("group_id", groupId)
+      .order("timestamp", { ascending: true })
+      .limit(150);
+    if (error) throw error;
+    return (data || []).map(mapGroupMessage);
+  }
 
-  _mapGroupMsgs(rows) {
-    return (rows || []).map(r => ({ id: r.id, fromUid: r.from_uid, groupId: r.group_id, ciphertext: r.ciphertext, cipherType: r.cipher_type, keyEnvelopes: r.key_envelopes || {}, timestamp: r.timestamp }));
-  },
-};
+  async function emitConversationList(uid, callback) {
+    const { data, error } = await sb
+      .from("direct_messages")
+      .select("dm_id,from_uid,to_uid,ciphertext,timestamp")
+      .or(`from_uid.eq.${uid},to_uid.eq.${uid}`)
+      .order("timestamp", { ascending: false })
+      .limit(500);
 
-window.CC = CC;
+    if (error) throw error;
+
+    const seen = new Set();
+    const convos = [];
+    for (const row of data || []) {
+      const otherUid = row.from_uid === uid ? row.to_uid : row.from_uid;
+      if (!otherUid || seen.has(otherUid)) continue;
+      seen.add(otherUid);
+      convos.push({
+        id: row.dm_id,
+        otherUid,
+        lastMessage: row.ciphertext,
+        lastTimestamp: row.timestamp,
+      });
+    }
+    callback(convos);
+  }
+
+  const CC = {
+    async registerUser({ email, username, password }) {
+      const u = safeLower(username);
+      if (u.length < 3) throw new Error("Username must be at least 3 characters.");
+      if (String(password || "").length < 8) throw new Error("Password must be at least 8 characters.");
+
+      const { data: existing } = await sb.from("users").select("uid").eq("username", u).maybeSingle();
+      if (existing) throw new Error("Username already taken.");
+
+      const { data, error } = await sb.auth.signUp({
+        email: String(email || "").trim(),
+        password,
+        options: {
+          data: {
+            username: u,
+          },
+        },
+      });
+      if (error) throw error;
+      if (!data.user) throw new Error("Could not create user.");
+
+      const uid = data.user.id;
+      const av = generateAvatar(u);
+      const { error: profileErr } = await sb.from("users").insert({
+        uid,
+        username: u,
+        email: String(email || "").trim(),
+        phone: null,
+        avatar_initials: av.initials,
+        avatar_color: av.color,
+      });
+      if (profileErr) console.error("Profile insert failed:", profileErr.message);
+
+      const mappedUser = mapAuthUser(data.user);
+      const hasSession = !!data.session;
+
+      if (hasSession && profileErr) {
+        try {
+          await this.createUserProfile(uid, {
+            username: u,
+            email: data.user.email,
+            phone: data.user.phone || null,
+          });
+        } catch (_) {}
+      }
+
+      return {
+        user: mappedUser,
+        pendingConfirmation: !hasSession,
+      };
+    },
+
+    async loginWithEmail(email, password) {
+      const { data, error } = await sb.auth.signInWithPassword({
+        email: String(email || "").trim(),
+        password,
+      });
+      if (error) throw error;
+      return mapAuthUser(data.user);
+    },
+
+    async loginWithUsername(username, password) {
+      const profile = await getProfileByUsername(username);
+      if (!profile || !profile.email) {
+        throw new Error("No email login found for that username.");
+      }
+      return this.loginWithEmail(profile.email, password);
+    },
+
+    async startPhoneSignIn(phoneNumber) {
+      const phone = String(phoneNumber || "").trim();
+      if (!phone) throw new Error("Phone number is required.");
+
+      const { data, error } = await sb.auth.signInWithOtp({ phone });
+      if (error) throw error;
+      return { phone, data };
+    },
+
+    async verifyPhoneOtp(confirmation, code) {
+      const phone = confirmation && confirmation.phone;
+      if (!phone) throw new Error("Send OTP first.");
+      const token = String(code || "").trim();
+      if (!token) throw new Error("OTP code is required.");
+
+      const { data, error } = await sb.auth.verifyOtp({
+        phone,
+        token,
+        type: "sms",
+      });
+      if (error) throw error;
+
+      const user = data.user;
+      if (user) {
+        const existing = await this.getUserProfile(user.id);
+        if (!existing) {
+          const fallback = phone.replace(/\D/g, "").slice(-6) || "user";
+          await this.createUserProfile(user.id, {
+            username: `user${fallback}`.slice(0, 20),
+            email: user.email || null,
+            phone: user.phone || phone,
+          });
+        }
+      }
+
+      return mapAuthUser(user);
+    },
+
+    async logoutUser() {
+      const { error } = await sb.auth.signOut();
+      if (error) throw error;
+      return true;
+    },
+
+    onAuthChange(callback) {
+      sb.auth.getSession().then(({ data }) => callback(mapAuthUser(data.session?.user || null)));
+      const { data } = sb.auth.onAuthStateChange((_event, session) => {
+        callback(mapAuthUser(session?.user || null));
+      });
+      return () => data.subscription.unsubscribe();
+    },
+
+    async getUserProfile(uid) {
+      const cleanUid = normalizeUuid(uid, "User ID");
+      const { data, error } = await sb.from("users").select("*").eq("uid", cleanUid).maybeSingle();
+      if (error) throw error;
+      return mapUser(data);
+    },
+
+    async createUserProfile(uid, { username, email, phone }) {
+      const cleanUid = normalizeUuid(uid, "User ID");
+      const u = (username || "user").toLowerCase().slice(0, 20);
+      const av = generateAvatar(u);
+      const { error } = await sb.from("users").upsert(
+        {
+          uid: cleanUid,
+          username: u,
+          email: email || null,
+          phone: phone || null,
+          avatar_initials: av.initials,
+          avatar_color: av.color,
+        },
+        { onConflict: "uid" }
+      );
+      if (error) {
+        if (isRlsUsersInsertError(error)) {
+          throw new Error(
+            "Profile creation is blocked by Supabase RLS. Run the SQL in supabase/schema.sql, including the policies and trigger."
+          );
+        }
+        throw error;
+      }
+      await new Promise((r) => setTimeout(r, 400));
+      return this.getUserProfile(cleanUid);
+    },
+
+    async searchUsers(query) {
+      const q = safeLower(query);
+      if (!q) return [];
+      const { data, error } = await sb
+        .from("users")
+        .select("*")
+        .ilike("username", `${q}%`)
+        .order("username", { ascending: true })
+        .limit(20);
+      if (error) throw error;
+      return (data || []).map(mapUser);
+    },
+
+    generateAvatar,
+
+    getDMId(uid1, uid2) {
+      return [normalizeUuid(uid1, "User ID"), normalizeUuid(uid2, "User ID")].sort().join("_");
+    },
+
+    async sendDM({ fromUid, toUid, ciphertext, cipherType, key }) {
+      const dmId = this.getDMId(fromUid, toUid);
+      const payload = {
+        id: crypto.randomUUID(),
+        dm_id: dmId,
+        from_uid: normalizeUuid(fromUid, "Sender ID"),
+        to_uid: normalizeUuid(toUid, "Recipient ID"),
+        ciphertext,
+        cipher_type: cipherType || null,
+        message_key: key ?? null,
+        timestamp: nowTs(),
+        read: false,
+      };
+      const { error } = await sb.from("direct_messages").insert(payload);
+      if (error) throw error;
+      return payload.id;
+    },
+
+    listenDM(uid1, uid2, callback) {
+      const dmId = this.getDMId(uid1, uid2);
+
+      const refresh = async () => {
+        const rows = await fetchDmRows(dmId);
+        callback(rows);
+      };
+
+      refresh().catch((err) => console.error(err));
+
+      const channel = sb
+        .channel(`dm:${dmId}`)
+        .on(
+          "postgres_changes",
+          { event: "INSERT", schema: "public", table: "direct_messages", filter: `dm_id=eq.${dmId}` },
+          () => refresh().catch((err) => console.error(err))
+        )
+        .subscribe();
+
+      return () => {
+        sb.removeChannel(channel);
+      };
+    },
+
+    listenConversations(uid, callback) {
+      const cleanUid = normalizeUuid(uid, "User ID");
+      const refresh = async () => {
+        await emitConversationList(cleanUid, callback);
+      };
+
+      refresh().catch((err) => console.error(err));
+
+      const channel = sb
+        .channel(`conversations:${cleanUid}`)
+        .on("postgres_changes", { event: "INSERT", schema: "public", table: "direct_messages" }, (payload) => {
+          const row = payload.new || {};
+          if (row.from_uid === cleanUid || row.to_uid === cleanUid) {
+            refresh().catch((err) => console.error(err));
+          }
+        })
+        .subscribe();
+
+      return () => {
+        sb.removeChannel(channel);
+      };
+    },
+
+    async createGroup({ name, creatorUid, memberUids }) {
+      const creator = normalizeUuid(creatorUid, "Creator ID");
+      const members = Array.from(new Set([creator, ...((memberUids || []).map((uid) => normalizeUuid(uid, "Member ID")))]));
+      const avatar = generateAvatar(name || "Group");
+      const groupId = crypto.randomUUID();
+
+      const { error } = await sb.from("groups").insert({
+        group_id: groupId,
+        name: String(name || "").trim() || "New group",
+        creator_uid: creator,
+        members,
+        avatar_initials: avatar.initials,
+        avatar_color: avatar.color,
+      });
+      if (error) throw error;
+      return groupId;
+    },
+
+    async getGroupsForUser(uid) {
+      const cleanUid = normalizeUuid(uid, "User ID");
+      const { data, error } = await sb
+        .from("groups")
+        .select("*")
+        .contains("members", [cleanUid])
+        .order("created_at", { ascending: false });
+      if (error) throw error;
+      return (data || []).map(mapGroup);
+    },
+
+    async getGroupInfo(groupId) {
+      const cleanGroupId = normalizeUuid(groupId, "Group ID");
+      const { data, error } = await sb.from("groups").select("*").eq("group_id", cleanGroupId).maybeSingle();
+      if (error) throw error;
+      return mapGroup(data);
+    },
+
+    async addMemberToGroup(groupId, newUid) {
+      const cleanGroupId = normalizeUuid(groupId, "Group ID");
+      const cleanUid = normalizeUuid(newUid, "Member ID");
+      const info = await this.getGroupInfo(cleanGroupId);
+      if (!info) throw new Error("Group not found.");
+      const members = Array.from(new Set([...(info.members || []), cleanUid]));
+      const { error } = await sb.from("groups").update({ members }).eq("group_id", cleanGroupId);
+      if (error) throw error;
+      return true;
+    },
+
+    async sendGroupMessage({ groupId, fromUid, ciphertext, cipherType, keyEnvelopes }) {
+      const payload = {
+        id: crypto.randomUUID(),
+        group_id: normalizeUuid(groupId, "Group ID"),
+        from_uid: normalizeUuid(fromUid, "Sender ID"),
+        ciphertext,
+        cipher_type: cipherType || null,
+        key_envelopes: keyEnvelopes || {},
+        timestamp: nowTs(),
+      };
+      const { error } = await sb.from("group_messages").insert(payload);
+      if (error) throw error;
+      return payload.id;
+    },
+
+    listenGroupMessages(groupId, callback) {
+      const cleanGroupId = normalizeUuid(groupId, "Group ID");
+
+      const refresh = async () => {
+        const rows = await fetchGroupRows(cleanGroupId);
+        callback(rows);
+      };
+
+      refresh().catch((err) => console.error(err));
+
+      const channel = sb
+        .channel(`group:${cleanGroupId}`)
+        .on(
+          "postgres_changes",
+          { event: "INSERT", schema: "public", table: "group_messages", filter: `group_id=eq.${cleanGroupId}` },
+          () => refresh().catch((err) => console.error(err))
+        )
+        .subscribe();
+
+      return () => {
+        sb.removeChannel(channel);
+      };
+    },
+  };
+
+  window.CC = CC;
+  window.CC_SUPABASE = sb;
+})();
