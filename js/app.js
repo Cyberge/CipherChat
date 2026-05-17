@@ -453,30 +453,27 @@
       const meta = document.createElement("div");
       meta.className = "bubbleMeta";
 
-      const cipherBadge = document.createElement("span");
-      cipherBadge.className = "badge";
-      cipherBadge.textContent = m.cipherType ? String(m.cipherType) : "plaintext";
-
       let displayText = String(m.ciphertext || "");
       let lock = "";
+      let canDecrypt = false;
 
       try {
         if (m.cipherType) {
           if (type === "dm") {
-            // Sender and receiver can decrypt (key stored on message)
             if (m.key) {
               displayText = CipherEngine.decrypt(m.cipherType, m.ciphertext, m.key);
               lock = "🔓";
+              canDecrypt = true;
             } else {
               lock = "🔒";
             }
           } else {
-            // group: check envelope
             const env = m.keyEnvelopes || {};
             const myKey = env[currentUser.uid];
             if (myKey) {
               displayText = CipherEngine.decrypt(m.cipherType, m.ciphertext, myKey);
               lock = "🔓";
+              canDecrypt = true;
             } else {
               lock = "🔒";
             }
@@ -501,7 +498,19 @@
         }
       }
 
-      meta.appendChild(cipherBadge);
+      // Cipher name only for sender or users who can decrypt (selective recipients)
+      if (m.cipherType && (isSent || canDecrypt)) {
+        const cipherBadge = document.createElement("span");
+        cipherBadge.className = "badge";
+        cipherBadge.textContent = String(m.cipherType);
+        meta.appendChild(cipherBadge);
+      } else if (!m.cipherType) {
+        const cipherBadge = document.createElement("span");
+        cipherBadge.className = "badge";
+        cipherBadge.textContent = "plaintext";
+        meta.appendChild(cipherBadge);
+      }
+
       if (m.cipherType) meta.appendChild(lockBadge);
 
       const body = document.createElement("div");

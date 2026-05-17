@@ -158,6 +158,19 @@ textarea {
   box-shadow: 0 0 0 4px var(--accent-glow);
 }
 
+.select {
+  background-color: var(--bg-elevated);
+  color: var(--text-primary);
+  color-scheme: dark;
+  cursor: pointer;
+}
+
+.select option,
+.select optgroup {
+  background-color: var(--bg-elevated);
+  color: var(--text-primary);
+}
+
 .pwWrap {
   position: relative;
 }
@@ -259,9 +272,12 @@ textarea {
   padding: 22px 16px;
 }
 
-.authCard {
+.login .authCard {
   width: min(480px, calc(100% - 24px));
   padding: 18px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.55);
 }
 
 .authTop {
