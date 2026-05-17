@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Sign in — CipherChat</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600&family=Syne:wght@600;700;800&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="../css/style.css" />
+</head>
+<body class="loginPage">
+  <div class="cipherBg" id="cipherBg"></div>
+  <div class="loginWrap">
+    <div class="loginLogo">CipherChat</div>
+    <div class="card">
+      <div class="authTabs">
+        <button type="button" class="authTab active" id="tabSignIn">Sign in</button>
+        <button type="button" class="authTab" id="tabRegister">Create account</button>
+      </div>
+
+      <div id="signInPanel">
+        <div class="loginMethodTabs">
+          <button type="button" class="methodTab active" data-method="email">Email</button>
+          <button type="button" class="methodTab" data-method="username">Username</button>
+          <button type="button" class="methodTab" data-method="phone">Phone</button>
+        </div>
+
+        <div id="methodEmail">
+          <div class="formGroup">
+            <label>Email</label>
+            <input type="email" id="loginEmail" placeholder="you@example.com" autocomplete="email" />
+          </div>
+        </div>
+        <div id="methodUsername" class="hidden">
+          <div class="formGroup">
+            <label>Username</label>
+            <input type="text" id="loginUsername" placeholder="username" autocomplete="username" oninput="this.value=this.value.toLowerCase()" />
+          </div>
+        </div>
+        <div id="methodPhone" class="hidden">
+          <div class="formGroup">
+            <label>Phone</label>
+            <input type="tel" id="loginPhone" placeholder="+1234567890" />
+          </div>
+          <p style="font-size:12px;color:var(--text2);margin-bottom:10px">Sign in with the email linked to your phone number.</p>
+        </div>
+
+        <div class="formGroup">
+          <label>Password</label>
+          <div class="pwWrap">
+            <input type="password" id="loginPassword" placeholder="••••••••" autocomplete="current-password" />
+            <button type="button" class="pwToggle" data-target="loginPassword" aria-label="Toggle password">👁</button>
+          </div>
+        </div>
+        <button type="button" class="btnPrimary" id="btnLogin">Sign in</button>
+      </div>
+
+      <div id="registerPanel" class="hidden">
+        <div class="formGroup">
+          <label>Username</label>
+          <input type="text" id="regUsername" placeholder="username" oninput="this.value=this.value.toLowerCase()" />
+        </div>
+        <div class="formGroup">
+          <label>Email</label>
+          <input type="email" id="regEmail" placeholder="you@example.com" />
+        </div>
+        <div class="formGroup">
+          <label>Password</label>
+          <div class="pwWrap">
+            <input type="password" id="regPassword" placeholder="At least 8 characters" />
+            <button type="button" class="pwToggle" data-target="regPassword" aria-label="Toggle password">👁</button>
+          </div>
+        </div>
+        <div class="formGroup">
+          <label>Confirm password</label>
+          <div class="pwWrap">
+            <input type="password" id="regPassword2" placeholder="••••••••" />
+            <button type="button" class="pwToggle" data-target="regPassword2" aria-label="Toggle password">👁</button>
+          </div>
+        </div>
+        <button type="button" class="btnPrimary" id="btnRegister">Create account</button>
+      </div>
+
+      <div class="errMsg" id="errMsg"></div>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="../js/supabase.js"></script>
+  <script>
+    const cipherBg = document.getElementById("cipherBg");
+    const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+    function refreshBg() {
+      let s = "";
+      const cols = Math.ceil(window.innerWidth / 10);
+      const rows = Math.ceil(window.innerHeight / 18);
+      for (let i = 0; i < cols * rows; i++) s += chars[Math.floor(Math.random() * chars.length)] + " ";
+      cipherBg.textContent = s;
+    }
+    refreshBg();
+    setInterval(refreshBg, 1600);
+
+    document.querySelectorAll(".pwToggle").forEach(btn => {
+      btn.addEventListener("click", () => {
+        const input = document.getElementById(btn.dataset.target);
+        const hidden = input.type === "password";
+        input.type = hidden ? "text" : "password";
+        btn.textContent = hidden ? "🙈" : "👁";
+      });
+    });
+
+    const tabSignIn = document.getElementById("tabSignIn");
+    const tabRegister = document.getElementById("tabRegister");
+    const signInPanel = document.getElementById("signInPanel");
+    const registerPanel = document.getElementById("registerPanel");
+    const errMsg = document.getElementById("errMsg");
+
+    tabSignIn.addEventListener("click", () => {
+      tabSignIn.classList.add("active");
+      tabRegister.classList.remove("active");
+      signInPanel.classList.remove("hidden");
+      registerPanel.classList.add("hidden");
+      errMsg.textContent = "";
+    });
+    tabRegister.addEventListener("click", () => {
+      tabRegister.classList.add("active");
+      tabSignIn.classList.remove("active");
+      registerPanel.classList.remove("hidden");
+      signInPanel.classList.add("hidden");
+      errMsg.textContent = "";
+    });
+
+    let loginMethod = "email";
+    document.querySelectorAll(".methodTab").forEach(tab => {
+      tab.addEventListener("click", () => {
+        loginMethod = tab.dataset.method;
+        document.querySelectorAll(".methodTab").forEach(t => t.classList.toggle("active", t === tab));
+        document.getElementById("methodEmail").classList.toggle("hidden", loginMethod !== "email");
+        document.getElementById("methodUsername").classList.toggle("hidden", loginMethod !== "username");
+        document.getElementById("methodPhone").classList.toggle("hidden", loginMethod !== "phone");
+        errMsg.textContent = "";
+      });
+    });
+
+    function showErr(msg) { errMsg.textContent = msg; }
+
+    document.getElementById("btnLogin").addEventListener("click", async () => {
+      const password = document.getElementById("loginPassword").value;
+      if (!password) { showErr("Enter your password."); return; }
+      showErr("");
+      try {
+        if (loginMethod === "email") {
+          const email = document.getElementById("loginEmail").value.trim();
+          if (!email) { showErr("Enter your email."); return; }
+          await CC.loginWithEmail(email, password);
+        } else if (loginMethod === "username") {
+          const username = document.getElementById("loginUsername").value.trim();
+          if (!username) { showErr("Enter your username."); return; }
+          await CC.loginWithUsername(username, password);
+        } else {
+          const phone = document.getElementById("loginPhone").value.trim();
+          if (!phone) { showErr("Enter your phone number."); return; }
+          const email = await CC.getEmailByPhone(phone);
+          if (!email) { showErr("User not found."); return; }
+          await CC.loginWithEmail(email, password);
+        }
+        window.location.replace("chat.html");
+      } catch (e) {
+        if (e.message === "USER_NOT_FOUND") showErr("User not found.");
+        else if (e.message === "WRONG_PASSWORD") showErr("Incorrect password.");
+        else showErr(e.message || String(e));
+      }
+    });
+
+    document.getElementById("btnRegister").addEventListener("click", async () => {
+      const username = document.getElementById("regUsername").value.trim();
+      const email = document.getElementById("regEmail").value.trim();
+      const password = document.getElementById("regPassword").value;
+      const password2 = document.getElementById("regPassword2").value;
+      if (!username || !email) { showErr("Fill in username and email."); return; }
+      if (password !== password2) { showErr("Passwords do not match."); return; }
+      showErr("");
+      try {
+        await CC.registerUser({ email, username, password });
+        await CC.loginWithEmail(email, password);
+        window.location.replace("chat.html");
+      } catch (e) {
+        showErr(e.message || String(e));
+      }
+    });
+  </script>
+</body>
+</html>
